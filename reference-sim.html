@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<!--
+  REFERENCE SIM — Projectile Motion
+  ----------------------------------
+  Reference example for the Sim-Maker Kit. To make a new sim, copy this file's
+  STRUCTURE and swap only the physics + content.
+
+  The shape (every sim follows it):
+    Mode 0 Learn    — concept, formula, worked example, "Famous Traps"
+    Mode 1 Explore  — sliders -> syncMx() -> redraw() live canvas
+    Mode 2 Practice — GENS[] question bank, grading, localStorage patch log
+
+  One file. No build step. No dependencies. Open it in any browser.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projectile Motion — Reference Sim</title>
+<style>
+  /* All colors come from CSS variables — never hardcode hex in markup/JS.
+     To re-theme a sim, change these five values and nothing else. */
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e5e7eb; --muted:#9ca3af;
+    --accent:#22d3ee; --warn:#fbbf24; --green:#22c55e; --red:#f87171;
+    --line:#2a2f3a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 ui-monospace,"Cascadia Code","SF Mono",Menlo,monospace}
+  header{padding:14px 16px;border-bottom:1px solid var(--line)}
+  h1{margin:0 0 8px;font-size:16px;color:var(--accent)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--panel);color:var(--muted);border:1px solid var(--line);
+        border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
+  .chip.on{color:var(--bg);background:var(--accent);border-color:var(--accent)}
+  main{padding:16px;max-width:880px;margin:0 auto}
+  section{display:none}
+  section.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+        padding:14px;margin-bottom:12px}
+  .formula{color:var(--accent)}
+  .trap{border-left:3px solid var(--warn);padding-left:10px;margin:8px 0}
+  canvas{width:100%;height:320px;display:block;background:#0b0d12;
+         border:1px solid var(--line);border-radius:8px}
+  .ctrl{display:flex;align-items:center;gap:10px;margin:10px 0}
+  .ctrl label{width:120px;color:var(--muted)}
+  .ctrl input[type=range]{flex:1}
+  .ctrl output{width:90px;text-align:right;color:var(--accent)}
+  .reads{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px}
+  .reads b{color:var(--green)}
+  button.act{background:var(--accent);color:var(--bg);border:0;border-radius:6px;
+             padding:8px 14px;cursor:pointer;font:inherit;font-weight:700}
+  .opt{display:block;width:100%;text-align:left;background:var(--panel);
+       color:var(--ink);border:1px solid var(--line);border-radius:6px;
+       padding:8px 12px;margin:6px 0;cursor:pointer;font:inherit}
+  .opt:hover{border-color:var(--accent)}
+  input.num{background:#0b0d12;color:var(--ink);border:1px solid var(--line);
+            border-radius:6px;padding:8px;font:inherit;width:140px}
+  .ok{color:var(--green)} .bad{color:var(--red)} .muted{color:var(--muted)}
+  .plist{margin:0;padding-left:18px} .plist li{margin:2px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Projectile Motion</h1>
+  <div class="chips" id="chips">
+    <button class="chip on" data-m="0">Learn</button>
+    <button class="chip" data-m="1">Explore</button>
+    <button class="chip" data-m="2">Practice</button>
+  </div>
+</header>
+
+<main>
+  <!-- ===== MODE 0: LEARN ===== -->
+  <section id="m0" class="on">
+    <div class="card">
+      <b>Concept.</b> Once it leaves the hand, a projectile only feels gravity.
+      Horizontal velocity stays constant; vertical velocity is pulled down by
+      <span class="formula">g = 9.81 m/s²</span>. The path is a parabola.
+    </div>
+    <div class="card">
+      <b>Formulas</b> (launch speed <span class="formula">v₀</span>, angle
+      <span class="formula">θ</span>):
+      <div class="formula">vₓ = v₀cosθ &nbsp; v_y = v₀sinθ</div>
+      <div class="formula">Range&nbsp;R = v₀²·sin(2θ) / g</div>
+      <div class="formula">Max height H = (v₀sinθ)² / (2g)</div>
+      <div class="formula">Time of flight T = 2·v₀sinθ / g</div>
+    </div>
+    <div class="card">
+      <b>Worked example.</b> v₀ = 20 m/s, θ = 30°.<br>
+      R = 20²·sin60° / 9.81 = 400·0.866 / 9.81 ≈ <b class="ok">35.3 m</b>.
+    </div>
+    <div class="card">
+      <b>Famous Traps</b>
+      <div class="trap"><b>45° myth.</b> 45° gives max range <i>only</i> on flat
+        ground with no air resistance — not "always".</div>
+      <div class="trap"><b>Complementary angles.</b> θ and (90°−θ) give the
+        <i>same range</i> (e.g. 30° and 60°) — a classic "pick the other one".</div>
+      <div class="trap"><b>vₓ is constant.</b> Horizontal speed never changes in
+        flight. Only v_y does. Don't "slow down" vₓ.</div>
+    </div>
+  </section>
+
+  <!-- ===== MODE 1: EXPLORE ===== -->
+  <section id="m1">
+    <canvas id="cvs"></canvas>
+    <div class="ctrl">
+      <label>Angle θ</label>
+      <input id="sTheta" type="range" min="5" max="85" value="45" step="1">
+      <output id="oTheta">45°</output>
+    </div>
+    <div class="ctrl">
+      <label>Speed v₀</label>
+      <input id="sV0" type="range" min="5" max="50" value="20" step="1">
+      <output id="oV0">20 m/s</output>
+    </div>
+    <div class="reads card">
+      <span>Range: <b id="rR">–</b></span>
+      <span>Max height: <b id="rH">–</b></span>
+      <span>Flight time: <b id="rT">–</b></span>
+      <span>vₓ: <b id="rVx">–</b></span>
+      <span>v_y: <b id="rVy">–</b></span>
+    </div>
+  </section>
+
+  <!-- ===== MODE 2: PRACTICE ===== -->
+  <section id="m2">
+    <div class="card" id="qCard">
+      <div id="qText" class="muted">Press “New question”.</div>
+      <div id="qBody" style="margin-top:10px"></div>
+      <div id="qFeed" style="margin-top:10px"></div>
+    </div>
+    <button class="act" id="bNew">New question</button>
+    <div class="card">
+      <b>Patch log</b> <span class="muted">(your weak spots — saved on this device)</span>
+      <ul class="plist" id="patch"><li class="muted">No misses yet.</li></ul>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const G = 9.81;
+
+/* proj(): SINGLE SOURCE OF TRUTH for all projectile physics.
+   Every mode (Explore readouts, canvas path, Practice answers) reads from here.
+   Centralizing means a formula fix happens in exactly one place. */
+function proj(thetaDeg, v0){
+  const th = thetaDeg * Math.PI/180;
+  const vx = v0*Math.cos(th), vy = v0*Math.sin(th);
+  const T = 2*vy/G;
+  const R = vx*T;          // = v0^2 sin(2θ)/g
+  const H = vy*vy/(2*G);
+  return {th, vx, vy, T, R, H};
+}
+
+/* ---- mode switching ---- */
+const chips = document.getElementById('chips');
+chips.addEventListener('click', e=>{
+  const b = e.target.closest('.chip'); if(!b) return;
+  const m = b.dataset.m;
+  chips.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c===b));
+  ['0','1','2'].forEach(i=>
+    document.getElementById('m'+i).classList.toggle('on', i===m));
+  if(m==='1'){ initCanvas(); syncMx(); }   // canvas needs a size before first draw
+});
+
+/* ---- EXPLORE: syncMx + redraw are ALWAYS paired. Never call redraw() alone. ---- */
+let ctx, CW, CH;
+function initCanvas(){
+  const cv = document.getElementById('cvs');
+  const dpr = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  CW = r.width; CH = r.height;
+  cv.width = Math.round(CW*dpr); cv.height = Math.round(CH*dpr);
+  ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);   // setTransform, NOT ctx.scale (scale compounds on re-init)
+}
+function syncMx(){
+  // read inputs -> update labels -> compute -> write readouts -> redraw
+  const theta = +document.getElementById('sTheta').value;
+  const v0 = +document.getElementById('sV0').value;
+  document.getElementById('oTheta').textContent = theta+'°';
+  document.getElementById('oV0').textContent = v0+' m/s';
+  const p = proj(theta, v0);
+  document.getElementById('rR').textContent  = p.R.toFixed(1)+' m';
+  document.getElementById('rH').textContent  = p.H.toFixed(1)+' m';
+  document.getElementById('rT').textContent  = p.T.toFixed(2)+' s';
+  document.getElementById('rVx').textContent = p.vx.toFixed(1)+' m/s';
+  document.getElementById('rVy').textContent = p.vy.toFixed(1)+' m/s';
+  redraw(p);
+}
+function redraw(p){
+  if(!ctx) return;
+  ctx.clearRect(0,0,CW,CH);
+  const pad = 36;
+  const worldW = Math.max(p.R*1.1, 1), worldH = Math.max(p.H*1.25, 1);
+  const sc = Math.min((CW-2*pad)/worldW, (CH-2*pad)/worldH);
+  const SX = x => pad + x*sc;
+  const SY = y => CH - pad - y*sc;   // flip: world-up = screen-down
+  // ground
+  ctx.strokeStyle = '#2a2f3a'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad, SY(0)); ctx.lineTo(CW-pad, SY(0)); ctx.stroke();
+  // trajectory
+  ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2; ctx.beginPath();
+  for(let i=0;i<=60;i++){
+    const t = p.T*i/60, x = p.vx*t, y = p.vy*t - 0.5*G*t*t;
+    i?ctx.lineTo(SX(x), SY(Math.max(y,0))):ctx.moveTo(SX(x), SY(0));
+  }
+  ctx.stroke();
+  // apex height marker (dashed)
+  ctx.strokeStyle = '#fbbf24'; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(SX(p.R/2), SY(0)); ctx.lineTo(SX(p.R/2), SY(p.H)); ctx.stroke();
+  ctx.setLineDash([]);
+  // landing dot
+  ctx.fillStyle = '#22c55e';
+  ctx.beginPath(); ctx.arc(SX(p.R), SY(0), 4, 0, 7); ctx.fill();
+}
+// live update; pointercancel guards touch-drag leaving the slider mid-gesture
+['input','change','pointercancel'].forEach(ev=>{
+  document.getElementById('sTheta').addEventListener(ev, syncMx);
+  document.getElementById('sV0').addEventListener(ev, syncMx);
+});
+addEventListener('resize', ()=>{ if(document.getElementById('m1').classList.contains('on')){ initCanvas(); syncMx(); }});
+
+/* ---- PRACTICE: GENS[] is the question bank. Each entry is a factory ()=>question.
+   A sim without GENS[] has nothing to grade and nothing for the patch log. ---- */
+const rnd = (a,b)=>a+Math.random()*(b-a);
+const GENS = [
+  // fixed multiple-choice trap
+  ()=>({
+    trap:'complementary-angle',
+    type:'mc',
+    q:'A ball launched at 30° lands at range R. Which OTHER angle gives the same R?',
+    choices:['15°','45°','60°','75°'],
+    ans:2,
+    why:'θ and 90°−θ share a range: 90−30 = 60°.'
+  }),
+  // randomized numeric — answer comes from proj(), the single source of truth
+  ()=>{
+    const theta = Math.round(rnd(20,70)), v0 = Math.round(rnd(10,40));
+    const R = proj(theta, v0).R;
+    return {
+      trap:'range-calc', type:'num',
+      q:`Find the range (m). θ=${theta}°, v₀=${v0} m/s, g=9.81. (±2%)`,
+      ans:R, tol:0.02,
+      why:`R = v₀²·sin(2θ)/g = ${R.toFixed(1)} m.`
+    };
+  }
+];
+
+let cur = null;
+const $ = id => document.getElementById(id);
+function newQ(){
+  cur = GENS[Math.floor(Math.random()*GENS.length)]();
+  $('qText').textContent = cur.q;
+  $('qFeed').textContent = '';
+  const body = $('qBody'); body.innerHTML = '';
+  if(cur.type==='mc'){
+    cur.choices.forEach((c,i)=>{
+      const b = document.createElement('button');
+      b.className='opt'; b.textContent=c;
+      b.onclick = ()=>grade(i===cur.ans);
+      body.appendChild(b);
+    });
+  } else {
+    const inp = document.createElement('input');
+    inp.className='num'; inp.type='number'; inp.placeholder='answer';
+    const b = document.createElement('button');
+    b.className='act'; b.textContent='Check'; b.style.marginLeft='8px';
+    b.onclick = ()=>{
+      const v = parseFloat(inp.value);
+      grade(isFinite(v) && Math.abs(v-cur.ans) <= cur.tol*Math.abs(cur.ans));
+    };
+    body.appendChild(inp); body.appendChild(b);
+  }
+}
+function grade(correct){
+  $('qFeed').innerHTML = correct
+    ? '<span class="ok">✓ Correct.</span> '+cur.why
+    : '<span class="bad">✗ Not quite.</span> '+cur.why;
+  if(!correct) logMiss(cur.trap);
+}
+
+/* ---- patch log: localStorage key is namespaced per topic, version-suffixed.
+   Format: simkit_<topic>_patch_v1 -> { trapName: missCount }. ---- */
+const PKEY = 'simkit_projectile_patch_v1';
+function logMiss(trap){
+  const d = JSON.parse(localStorage.getItem(PKEY) || '{}');
+  d[trap] = (d[trap]||0) + 1;
+  localStorage.setItem(PKEY, JSON.stringify(d));
+  renderPatch();
+}
+function renderPatch(){
+  const d = JSON.parse(localStorage.getItem(PKEY) || '{}');
+  const rows = Object.entries(d).sort((a,b)=>b[1]-a[1]);
+  const ul = $('patch');
+  ul.innerHTML = rows.length
+    ? rows.map(([k,v])=>`<li><b>${k}</b> — missed ${v}×</li>`).join('')
+    : '<li class="muted">No misses yet.</li>';
+}
+$('bNew').onclick = newQ;
+
+/* ---- init ---- */
+renderPatch();
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<!-- Human-facing visual version of WHEN-TO-USE-A-SWARM.md. Same design family as
+     index.html. The .md stays the source/AI-readable copy; this is for people. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>When to use a swarm — Sim-Maker Kit</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e5e7eb; --muted:#9ca3af;
+    --accent:#22d3ee; --warn:#fbbf24; --green:#22c55e; --red:#f87171; --line:#2a2f3a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.6 ui-monospace,"Cascadia Code","SF Mono",Menlo,monospace}
+  .wrap{max-width:860px;margin:0 auto;padding:0 18px 64px}
+  .topbar{max-width:860px;margin:0 auto;padding:14px 18px 0}
+  .topbar a{color:var(--muted);text-decoration:none;font-size:13px}
+  .topbar a:hover{color:var(--accent)}
+
+  /* hero */
+  .hero{position:relative;padding:48px 0 36px;text-align:center;overflow:hidden}
+  #fan{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:.5}
+  .hero>*{position:relative;z-index:1}
+  .kicker{color:var(--accent);letter-spacing:.18em;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(26px,5vw,40px);line-height:1.15;margin:14px 0 12px}
+  h1 .hl{color:var(--accent)}
+  .sub{color:var(--muted);max-width:600px;margin:0 auto;font-size:16px}
+
+  h2{font-size:18px;color:var(--accent);margin:42px 0 14px;
+     border-bottom:1px solid var(--line);padding-bottom:8px}
+
+  /* the headline rule */
+  .rule{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);
+        border-radius:10px;padding:20px;text-align:center}
+  .rule .big{font-size:clamp(22px,4vw,30px);font-weight:700;color:var(--ink)}
+  .rule .big b{color:var(--accent)}
+  .rule p{color:var(--muted);margin:8px 0 0}
+
+  /* ladder */
+  ol.ladder{counter-reset:s;list-style:none;padding:0;margin:0}
+  ol.ladder li{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+        padding:14px 14px 14px 52px;position:relative;margin-bottom:10px}
+  ol.ladder li::before{counter-increment:s;content:counter(s);position:absolute;
+        left:14px;top:14px;width:24px;height:24px;border-radius:50%;
+        background:var(--accent);color:var(--bg);font-weight:700;
+        text-align:center;line-height:24px;font-size:13px}
+  ol.ladder b{color:var(--ink)}
+  ol.ladder li.swarm::before{background:var(--warn)}
+  ol.ladder .muted{color:var(--muted)}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .card h3{margin:0 0 6px;font-size:15px;color:var(--accent)}
+  .card p{color:var(--muted);font-size:14px;margin:0}
+  .card code{color:var(--warn);font-size:13px}
+
+  .callout{border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:14px;
+           background:var(--panel)}
+  .callout.test{border-left:4px solid var(--green)}
+  .callout.warn{border-left:4px solid var(--warn)}
+  .callout .lbl{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.1em}
+  .callout.test .lbl{color:var(--green)} .callout.warn .lbl{color:var(--warn)}
+  .callout p{margin:8px 0 0;color:var(--ink)}
+  .callout em{color:var(--accent);font-style:normal}
+
+  .gate{list-style:none;padding:0;margin:0}
+  .gate li{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+           padding:12px 14px;margin-bottom:10px}
+  .gate b{color:var(--ink)}
+
+  .tldr{margin-top:34px;text-align:center;font-size:17px;color:var(--ink);
+        background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .tldr b{color:var(--accent)}
+  .foot{margin-top:34px;color:var(--muted);font-size:14px;text-align:center;
+        border-top:1px solid var(--line);padding-top:20px}
+  .foot a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="index.html">← Sim-Maker Kit</a></div>
+
+<div class="hero">
+  <canvas id="fan"></canvas>
+  <div class="wrap">
+    <div class="kicker">Sim-Maker Kit</div>
+    <h1>When to use <span class="hl">a swarm</span></h1>
+    <p class="sub">Pointing several AI agents at a job in parallel is powerful — and
+       the fastest way to burn through a metered plan. Here's the rule for when it
+       pays off, and when it just costs you.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <h2>The rule</h2>
+  <div class="rule">
+    <div class="big">Default: <b>don't.</b></div>
+    <p>Building one sim is a one-agent job — always. A swarm can't build a single
+       HTML file faster: there's only one file, so the agents collide, duplicate
+       work, and you pay N times for one result. One agent, one file.</p>
+  </div>
+
+  <h2>The cheap-first ladder</h2>
+  <p style="color:var(--muted);margin-top:0">Stop at the first rung that works.</p>
+  <ol class="ladder">
+    <li><b>One agent.</b> Almost everything — building, fixing, or explaining one sim.</li>
+    <li><b>One agent, several steps.</b> <span class="muted">"First do X, then Y."
+        Cheaper than a swarm, and you can course-correct between steps.</span></li>
+    <li class="swarm"><b>A swarm — only when the work is both <em style="color:var(--warn)">broad</em>
+        and <em style="color:var(--warn)">independent</em>:</b> <span class="muted">many
+        separate items, no shared state, each agent finishing without waiting on the
+        others.</span></li>
+  </ol>
+  <p style="color:var(--muted)">If the pieces depend on each other, it's not a swarm
+     job — it's rung 2.</p>
+
+  <h2>When a swarm actually pays off</h2>
+  <p style="color:var(--muted);margin-top:0">Not building — <b style="color:var(--ink)">gathering</b>.</p>
+  <div class="cards">
+    <div class="card"><h3>Decide what to build</h3>
+      <p>"Research 8 topics students struggle with and rank them" — 8 agents, one
+         topic each.</p></div>
+    <div class="card"><h3>Audit many at once</h3>
+      <p>"Check these 20 sims for the same bug" — one agent per file.</p></div>
+    <div class="card"><h3>Find references</h3>
+      <p>"Search for open-source examples across these sources" — one agent per
+         source.</p></div>
+  </div>
+  <div class="callout test">
+    <div class="lbl">The test</div>
+    <p>Could you hand each agent its slice on a separate sticky note and never have
+       them talk? <em>If yes → swarm. If no → one agent.</em></p>
+  </div>
+
+  <h2>The catch: swarms make things up</h2>
+  <div class="callout warn">
+    <div class="lbl">⚠ Verify before you build</div>
+    <p>Parallel research agents confidently invent citations, stats, and "facts" — a
+       real, measured failure mode. Never trust swarm research output as-is.
+       Spot-check the load-bearing claims against a primary source first. One
+       fabricated "students struggle with X" sends you building the wrong sim.</p>
+  </div>
+
+  <h2>Before any swarm — the token gate</h2>
+  <ul class="gate">
+    <li><b>Check your usage first.</b> A swarm of 8 agents is roughly 8× the cost of
+        one. On a metered plan, know what you have left before you fire.</li>
+    <li><b>Cap the fan-out.</b> Start with 3–5 agents, not 20. You can always run
+        another batch.</li>
+    <li><b>Ask if sequential is good enough.</b> Usually yes — and it's a fraction of
+        the cost.</li>
+  </ul>
+
+  <div class="tldr">Rule of thumb: swarm to <b>find out what to build</b>,
+     never to <b>build it</b>.</div>
+
+  <div class="foot">Built for studying with AI · MIT-licensed — free to use and adapt.
+     <br>Source: <a href="WHEN-TO-USE-A-SWARM.md">WHEN-TO-USE-A-SWARM.md</a></div>
+</div>
+
+<script>
+"use strict";
+// Hero eye-catch: a task node fanning out to parallel agent nodes, with pulses
+// travelling along the branches. Decorative — represents parallel agents.
+(() => {
+  const cv = document.getElementById('fan');
+  const ctx = cv.getContext('2d');
+  let W, H;
+  function size(){
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect(); W = r.width; H = r.height;
+    cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  size(); addEventListener('resize', size);
+  const N = 5;                                   // agent nodes
+  let t = 0;
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    const rx = W*0.2, ry = H*0.5;                // root (task) node
+    const len = W*0.55;
+    for(let i=0;i<N;i++){
+      const ang = (-0.5 + i/(N-1)) * 0.9;        // fan spread (radians)
+      const ax = rx + len*Math.cos(ang), ay = ry + len*Math.sin(ang);
+      // branch
+      ctx.strokeStyle = '#2a2f3a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(rx,ry); ctx.lineTo(ax,ay); ctx.stroke();
+      // travelling pulse
+      const p = ((t*0.5 + i*0.17) % 1);
+      const px = rx + (ax-rx)*p, py = ry + (ay-ry)*p;
+      ctx.fillStyle = '#22d3ee'; ctx.globalAlpha = 0.8*(1-p)+0.2;
+      ctx.beginPath(); ctx.arc(px,py,3,0,7); ctx.fill(); ctx.globalAlpha = 1;
+      // agent node
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath(); ctx.arc(ax,ay,4,0,7); ctx.fill();
+    }
+    // root node
+    ctx.fillStyle = '#22d3ee';
+    ctx.beginPath(); ctx.arc(rx,ry,6,0,7); ctx.fill();
+    t += 0.01;
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+</body>
+</html>

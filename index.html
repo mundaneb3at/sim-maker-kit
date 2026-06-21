@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<!-- Landing page for the Sim-Maker Kit. README.md is the GitHub homepage;
+     this page is the live demo, best viewed via GitHub Pages or a local server. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sim-Maker Kit</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e5e7eb; --muted:#9ca3af;
+    --accent:#22d3ee; --warn:#fbbf24; --green:#22c55e; --line:#2a2f3a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.6 ui-monospace,"Cascadia Code","SF Mono",Menlo,monospace}
+  .wrap{max-width:860px;margin:0 auto;padding:0 18px 64px}
+
+  /* hero */
+  .hero{position:relative;padding:64px 0 40px;text-align:center;overflow:hidden}
+  #arc{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:.55}
+  .hero>*{position:relative;z-index:1}
+  .kicker{color:var(--accent);letter-spacing:.18em;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(26px,5vw,40px);line-height:1.15;margin:14px 0 12px}
+  h1 .hl{color:var(--accent)}
+  .sub{color:var(--muted);max-width:560px;margin:0 auto;font-size:16px}
+  .pill{display:inline-block;margin-top:22px;background:var(--accent);color:var(--bg);
+        font-weight:700;padding:10px 18px;border-radius:8px;text-decoration:none}
+
+  h2{font-size:18px;color:var(--accent);margin:46px 0 14px;
+     border-bottom:1px solid var(--line);padding-bottom:8px}
+  .frame{border:1px solid var(--line);border-radius:10px;overflow:hidden;
+         background:#0b0d12;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  iframe{width:100%;height:560px;border:0;display:block}
+  .hint{color:var(--muted);font-size:13px;margin:8px 2px 0}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .card .n{color:var(--accent);font-weight:700}
+  .card h3{margin:6px 0 6px;font-size:15px}
+  .card code{color:var(--warn);font-size:13px;word-break:break-all}
+  .card p{color:var(--muted);font-size:14px;margin:8px 0 0}
+
+  ol.flow{counter-reset:s;list-style:none;padding:0;margin:0}
+  ol.flow li{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+             padding:12px 14px 12px 48px;position:relative;margin-bottom:10px}
+  ol.flow li::before{counter-increment:s;content:counter(s);position:absolute;
+             left:14px;top:12px;width:22px;height:22px;border-radius:50%;
+             background:var(--accent);color:var(--bg);font-weight:700;
+             text-align:center;line-height:22px;font-size:13px}
+  ol.flow code{color:var(--warn)}
+  .foot{margin-top:40px;color:var(--muted);font-size:14px;text-align:center;
+        border-top:1px solid var(--line);padding-top:20px}
+</style>
+</head>
+<body>
+<div class="hero">
+  <canvas id="arc"></canvas>
+  <div class="wrap">
+    <div class="kicker">Sim-Maker Kit</div>
+    <h1>Make study sims <span class="hl">your AI builds for you</span></h1>
+    <p class="sub">A toolkit for building self-contained, interactive study
+       simulations with an AI coding assistant. A “sim” is a single HTML file that
+       teaches one topic three ways — read it, explore it, quiz yourself. Point any
+       AI at the example and get a new one on any subject.</p>
+    <a class="pill" href="#live">↓ Play with one first</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <h2 id="live">See it live</h2>
+  <div class="frame"><iframe src="reference-sim.html" title="Reference sim"
+       loading="lazy"></iframe></div>
+  <p class="hint">↑ A real sim, running live. Learn it, drag the sliders, then quiz
+     yourself — it remembers what you get wrong. This exact file is the template the
+     AI copies. <a href="reference-sim.html" target="_blank" rel="noopener">Open it in
+     its own tab →</a><br><span style="opacity:.65">If the embed above is blank, you
+     opened this page from a local file — view it via the live demo or a local
+     server.</span></p>
+
+  <h2>What's in the folder</h2>
+  <div class="cards">
+    <div class="card"><div class="n">01</div><h3>The example</h3>
+      <code>reference-sim.html</code>
+      <p>The working sim above. One file, no install. Your AI clones its shape.</p></div>
+    <div class="card"><div class="n">02</div><h3>The recipe</h3>
+      <code>HOW-TO-MAKE-A-SIM.md</code>
+      <p>Hand this to your AI. It has a ready-made prompt — paste it, name a topic,
+         get a sim back.</p></div>
+    <div class="card"><div class="n">03</div><h3>Going bigger</h3>
+      <code>WHEN-TO-USE-A-SWARM.md</code>
+      <p>When (and when not) to throw lots of AI at it — so you don't burn through
+         your plan. <a href="swarm.html" style="color:var(--accent);text-decoration:none">Open the visual guide →</a></p></div>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol class="flow">
+    <li>Drop this folder into your AI coding tool (Cursor, Claude, Copilot…).</li>
+    <li>Open <code>HOW-TO-MAKE-A-SIM.md</code> and paste its build prompt to your AI.</li>
+    <li>Tell it the topic you're studying. It reads the example and makes you a sim —
+        usually first try.</li>
+  </ol>
+
+  <div class="foot">Built for studying with AI · MIT-licensed — free to use and adapt.</div>
+</div>
+
+<script>
+"use strict";
+// Hero eye-catch: a projectile arc that draws itself, then loops. Decorative only.
+(() => {
+  const cv = document.getElementById('arc');
+  const ctx = cv.getContext('2d');
+  let W, H, dpr;
+  function size(){
+    dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect(); W = r.width; H = r.height;
+    cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  size(); addEventListener('resize', size);
+  let t = 0;
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    const pad = 40, g = 9.81, v0 = 1, ang = 52*Math.PI/180;
+    const vx = Math.cos(ang), vy = Math.sin(ang);
+    const T = 2*vy/g, R = vx*T, Hmax = vy*vy/(2*g);
+    const sc = Math.min((W-2*pad)/R, (H-2*pad)/Hmax) * 0.9;
+    const SX = x => pad + x*sc, SY = y => H - pad - y*sc;
+    const prog = (Math.sin(t)+1)/2;            // 0..1..0 sweep
+    ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2; ctx.beginPath();
+    for(let i=0;i<=70*prog;i++){
+      const tt = T*i/70, x = vx*tt, y = vy*tt - 0.5*g*tt*tt;
+      i?ctx.lineTo(SX(x),SY(Math.max(y,0))):ctx.moveTo(SX(x),SY(0));
+    }
+    ctx.stroke();
+    const tt = T*prog, bx = vx*tt, by = Math.max(vy*tt-0.5*g*tt*tt,0);
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath(); ctx.arc(SX(bx),SY(by),4,0,7); ctx.fill();
+    t += 0.012;
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+</body>
+</html>
