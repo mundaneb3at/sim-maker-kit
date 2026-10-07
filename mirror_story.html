@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mirror Story — How Curved Mirrors Form Images · PHYS 111</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1115;color:#e8eaf0;font-family:ui-monospace,monospace;min-height:100vh;padding:16px;display:flex;justify-content:center}
+.wrap{width:100%;max-width:920px}
+h1{font-size:1.05rem;color:#22d3ee;margin-bottom:3px;letter-spacing:.04em}
+.sub{font-size:.75rem;color:#64748b;margin-bottom:12px}
+.scene-title{font-size:.85rem;color:#fbbf24;letter-spacing:.06em;margin-bottom:8px;min-height:1.2em}
+canvas{display:block;width:100%;border-radius:8px;background:#111827;border:1px solid #2d3147}
+#scrub{width:100%;margin-top:8px;accent-color:#22d3ee;cursor:pointer;height:18px}
+.caption{min-height:4.6em;padding:10px 14px;margin-top:10px;background:#1a1d27;border:1px solid #2d3147;border-radius:8px;font-size:.86rem;line-height:1.55;color:#cbd5e1}
+.caption.fadein{animation:capfade .45s ease}
+@keyframes capfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.caption .k{color:#22d3ee;font-weight:700}
+.caption .w{color:#fbbf24;font-weight:700}
+.caption .v{color:#a78bfa;font-weight:700}
+.eq{min-height:3.2em;padding:8px 14px;margin-top:8px;background:#111827;border:1px solid #163445;border-radius:8px;font-size:.84rem;line-height:1.8;color:#7dd3fc}
+.eq:empty{visibility:hidden}
+.eq .k{color:#22d3ee;font-weight:700}
+.eq .w{color:#fbbf24;font-weight:700}
+.eq .v{color:#a78bfa;font-weight:700}
+.eq .dim{color:#64748b}
+.controls{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{padding:6px 16px;border-radius:7px;border:1.5px solid #334155;background:#1e2130;color:#94a3b8;cursor:pointer;font-family:inherit;font-size:.82rem;transition:.15s}
+button:hover{border-color:#22d3ee;color:#a5f3fc}
+button.play{border-color:#22d3ee;background:#083344;color:#a5f3fc;min-width:96px}
+.dots{display:flex;gap:7px;margin-left:auto}
+.dot{width:11px;height:11px;border-radius:50%;background:#334155;cursor:pointer;transition:.15s}
+.dot.on{background:#22d3ee}
+.hint{font-size:.68rem;color:#475569;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🪞 Mirror Story — how curved mirrors form images</h1>
+  <div class="sub">TA9 · concave + convex · sibling of lens_story.html — same equation, new geography</div>
+  <div class="scene-title" id="sceneTitle"></div>
+  <canvas id="cvs"></canvas>
+  <input type="range" id="scrub" min="0" max="1000" step="1" value="0" title="drag to scrub through the story">
+  <div class="caption fadein" id="caption"></div>
+  <div class="eq" id="eq"></div>
+  <div class="controls">
+    <button id="btnPrev">‹ Prev</button>
+    <button id="btnPlay" class="play">⏸ Pause</button>
+    <button id="btnNext">Next ›</button>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="hint">drag the slider to scrub anywhere in the story · space = play/pause · ←/→ = scene · click a dot to replay a scene</div>
+</div>
+
+<script>
+// ─── MIRROR STORY — HOW CURVED MIRRORS FORM IMAGES (TA9) ──────────────────
+// The big idea: a curved mirror plays the SAME accounting game as a lens —
+//
+//   1/f = 1/d_o + 1/d_i     with     f = R/2
+//   m = −d_i/d_o            (m > 0 upright, m < 0 inverted)
+//
+// — but the GEOGRAPHY flips: light bounces BACK, so a real image (d_i > 0)
+// forms IN FRONT of the mirror (same side as the object), and a virtual
+// image (d_i < 0) hides BEHIND the glass. (Formula card: s, s' = d_o, d_i.)
+//
+// Five auto-playing scenes:
+//   1 — Parallel rays → F at f = R/2 (satellite dish / solar cooker)
+//   2 — Concave, object outside F: real inverted image in front; at C → m = −1
+//   3 — Concave, object crosses INSIDE F: virtual, magnified, behind (makeup mirror)
+//   4 — Convex (f < 0): always virtual, upright, reduced (car / security mirror)
+//   5 — Lens vs mirror side-by-side: WHERE "real" lives is the exam trap
+//
+// Famous trap: for a LENS, d_i > 0 means the far side; for a MIRROR it means
+// in FRONT. Real image = where the light actually goes — through a lens,
+// back out from a mirror.
+
+// ── Canvas boot — DPR-aware, fixed height, zero-width-proof ───────────────
+// Same bug-log armour as lens_story: height is a CONSTANT (#8/#13/#14 was
+// literally mirror_optics' exponential-height crash), width has a || fallback
+// (#10/#11/#17), transform is SET, never multiplied.
+const H = 380;
+const cvs = document.getElementById('cvs');
+const g = cvs.getContext('2d');
+let W = 600;
+function initCanvas(){
+  const dpr = window.devicePixelRatio || 1;
+  W = cvs.clientWidth || 600;
+  cvs.style.height = H + 'px';
+  cvs.width = W * dpr;
+  cvs.height = H * dpr;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ── Tiny math + drawing toolkit (shared shape with lens_story) ────────────
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const ease = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+
+/*
+ * mirrorCalc — the whole physics of this file (identical algebra to the
+ * lens: 1/f = 1/d_o + 1/d_i, m = −d_i/d_o; only f = R/2 is mirror-specific).
+ *
+ * Worked example: concave R = 60 → f = +30, object at d_o = 45:
+ *   1/d_i = 1/30 − 1/45 = 1/90  →  d_i = +90  (real, IN FRONT)
+ *   m = −90/45 = −2             →  inverted, twice as tall
+ * Inside f (d_o = 14):  d_i = −26.3, m = +1.9 → virtual, behind, magnified.
+ */
+function mirrorCalc(f, do_){ const di = 1/(1/f - 1/do_); return { di, m: -di/do_ }; }
+
+// mkView — world→pixel. Mirror VERTEX at world x = 0; +x points BEHIND the
+// glass (right), −x is in front where the object and all real images live.
+function mkView(xmin, xmax){
+  const S = (W * 0.92) / (xmax - xmin);
+  const cy = H/2;
+  return { S, px: x => (x - xmin) * S + W * 0.04, py: y => cy - y * S, cy };
+}
+
+// drawPartial — reveal a polyline up to a fraction of its arc length.
+function drawPartial(pts, frac){
+  if (frac <= 0) return;
+  let L = 0; const seg = [];
+  for (let i = 1; i < pts.length; i++){
+    const d = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    seg.push(d); L += d;
+  }
+  let rem = L * Math.min(frac, 1);
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++){
+    const d = seg[i-1];
+    if (rem >= d){ g.lineTo(pts[i][0], pts[i][1]); rem -= d; }
+    else { const r = rem/d;
+      g.lineTo(pts[i-1][0] + (pts[i][0]-pts[i-1][0])*r, pts[i-1][1] + (pts[i][1]-pts[i-1][1])*r);
+      break; }
+  }
+  g.stroke();
+}
+
+function drawAxis(){
+  g.strokeStyle = '#2b3245'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, H/2); g.lineTo(W, H/2); g.stroke();
+}
+
+/*
+ * drawMirrorArc — the glass itself, drawn as a true circular arc.
+ *
+ * Sign convention drives the geometry: the centre of curvature sits at
+ * world x = −R (concave R > 0 → centre in FRONT; convex R < 0 → centre
+ * BEHIND). The vertex is the arc point at x = 0 facing the light.
+ * Crosshatch goes on the BACK (silvered) side so it reads mirror, not lens.
+ */
+function drawMirrorArc(v, R, halfHpx){
+  const aR = Math.abs(R) * v.S;
+  const cxPx = v.px(-R);
+  const base = R > 0 ? 0 : Math.PI;              // vertex faces the incoming light
+  const th = Math.asin(Math.min(halfHpx / aR, 0.75));
+  g.save();
+  g.strokeStyle = '#22d3ee'; g.lineWidth = 3;
+  g.beginPath(); g.arc(cxPx, v.cy, aR, base - th, base + th); g.stroke();
+  g.strokeStyle = 'rgba(34,211,238,0.35)'; g.lineWidth = 1;
+  for (let i = -4; i <= 4; i++){
+    const a = base + th * i / 4.5;
+    const x = cxPx + Math.cos(a) * aR, y = v.cy + Math.sin(a) * aR;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + 7, y - 6); g.stroke();
+  }
+  g.restore();
+}
+
+// arcHitX — true x on the curve at paraxial height y, so rays visibly touch
+// the glass instead of a floating vertical plane.
+function arcHitX(R, y){ return -R + Math.sign(R) * Math.sqrt(R*R - y*y); }
+
+function markPoint(v, x, color, label){
+  g.beginPath(); g.arc(v.px(x), v.cy, 3, 0, Math.PI*2); g.fillStyle = color; g.fill();
+  g.fillStyle = color; g.font = '11px ui-monospace,monospace';
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillText(label, v.px(x), v.cy + 6);
+}
+function arrowV(xpx, ytipPx, color, dashed, label){
+  const cy = H/2;
+  g.save();
+  g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 2.5;
+  if (dashed) g.setLineDash([6,5]);
+  g.beginPath(); g.moveTo(xpx, cy); g.lineTo(xpx, ytipPx); g.stroke();
+  g.setLineDash([]);
+  const dir = ytipPx < cy ? 1 : -1;
+  g.beginPath(); g.moveTo(xpx, ytipPx);
+  g.lineTo(xpx - 5, ytipPx + dir*10); g.lineTo(xpx + 5, ytipPx + dir*10);
+  g.closePath(); g.fill();
+  if (label){
+    g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.textBaseline = ytipPx < cy ? 'bottom' : 'top';
+    g.fillText(label, xpx, ytipPx + (ytipPx < cy ? -6 : 6));
+  }
+  g.restore();
+}
+function measure(x1px, x2px, ypx, color, label){
+  g.save();
+  g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(x1px, ypx); g.lineTo(x2px, ypx);
+  g.moveTo(x1px, ypx-4); g.lineTo(x1px, ypx+4);
+  g.moveTo(x2px, ypx-4); g.lineTo(x2px, ypx+4);
+  g.stroke();
+  g.font = '11px ui-monospace,monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+  g.fillText(label, (x1px+x2px)/2, ypx - 3);
+  g.restore();
+}
+
+/*
+ * drawObjectRays — the one ray rule of the file.
+ *
+ * Paraxial reflection: EVERY ray from the object tip (−d_o, h) reflects off
+ * the arc along the line joining its hit point to the image point
+ * (−d_i, m·h). Real image (d_i > 0): the reflected rays converge in front
+ * and cross there. Virtual (d_i < 0): they diverge leftward; only their
+ * dashed extensions reach the image, behind the glass.
+ *
+ * Building the reflected ray THROUGH the computed image point (instead of
+ * hand-deriving exit slopes) is what killed the bug-#56 class in
+ * mirror_optics — there is no slope sign to get wrong.
+ */
+function drawObjectRays(v, R, do_, di, m, h, reveal){
+  const heights = [h, h*0.55, 0];                 // parallel-in, generic, vertex ray
+  const mh = m * h;
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.75)'; g.lineWidth = 1.7;
+  g.shadowColor = '#22d3ee'; g.shadowBlur = 3;
+  heights.forEach(y => {
+    const xh = arcHitX(R, y);
+    const tip = [v.px(-do_), v.py(h)];
+    const hit = [v.px(xh), v.py(y)];
+    let dx = -di - xh, dy = mh - y;               // world vector hit → image point
+    if (di < 0){ dx = -dx; dy = -dy; }            // virtual: light travels AWAY from it
+    const L = Math.hypot(dx, dy) || 1;
+    const end = [ xh + dx/L*260, y + dy/L*260 ];  // 260 world units ≈ off canvas
+    drawPartial([ tip, hit, [v.px(end[0]), v.py(end[1])] ], reveal);
+  });
+  g.restore();
+  if (di < 0 && reveal > 0.75){
+    // Dashed extensions BEHIND the glass, meeting at the virtual image.
+    g.save();
+    g.strokeStyle = 'rgba(167,139,250,0.75)'; g.lineWidth = 1.3; g.setLineDash([6,5]);
+    heights.forEach(y => {
+      const xh = arcHitX(R, y);
+      g.beginPath(); g.moveTo(v.px(xh), v.py(y)); g.lineTo(v.px(-di), v.py(mh)); g.stroke();
+    });
+    g.restore();
+  }
+}
+
+// ── SCENE 1 — parallel rays → F at f = R/2 ────────────────────────────────
+/*
+ * The mirror version of "object at infinity": every incoming parallel ray
+ * reflects through F, which sits HALFWAY to the centre of curvature C.
+ * That halving (f = R/2) is pure geometry of equal-angle reflection off a
+ * sphere — and it is why problems handing you R want it halved first.
+ */
+function drawScene1(t){
+  const R = 60, f = 30;
+  const v = mkView(-75, 28);
+  const hh = H * 0.335;
+  drawAxis(); drawMirrorArc(v, R, hh);
+  markPoint(v, -R, '#94a3b8', 'C');
+  markPoint(v, -f, '#fbbf24', 'F');
+  const reveal = ease(clamp01(t / 0.62));
+  const A = hh / v.S * 0.85;
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.7)'; g.lineWidth = 1.6;
+  g.shadowColor = '#22d3ee'; g.shadowBlur = 3;
+  const NB = 7;
+  for (let i = 0; i < NB; i++){
+    const y = -A + 2*A * i/(NB-1);
+    const xh = arcHitX(R, y);
+    // reflected: through F, then continue past it
+    const k = 1.9;
+    const ex = xh + k * (-f - xh), ey = y + k * (0 - y);
+    drawPartial([ [v.px(-75), v.py(y)], [v.px(xh), v.py(y)], [v.px(ex), v.py(ey)] ], reveal);
+  }
+  g.restore();
+  if (t > 0.55){
+    const p = clamp01((t - 0.55)/0.15);
+    const r = 6 + 2.5*Math.sin(t*16);
+    const grad = g.createRadialGradient(v.px(-f), v.cy, 0, v.px(-f), v.cy, r*3);
+    grad.addColorStop(0, 'rgba(251,191,36,' + 0.9*p + ')');
+    grad.addColorStop(1, 'rgba(251,191,36,0)');
+    g.fillStyle = grad;
+    g.beginPath(); g.arc(v.px(-f), v.cy, r*3, 0, Math.PI*2); g.fill();
+    measure(v.px(-f), v.px(0), v.cy + 46, '#fbbf24', 'f = R/2');
+    measure(v.px(-R), v.px(0), v.cy + 64, '#94a3b8', 'R');
+  }
+  g.fillStyle = '#7dd3fc'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'left';
+  g.fillText('parallel rays from a very distant object', v.px(-74), 30);
+}
+
+// ── SCENE 2 — concave, object outside F: real image IN FRONT ──────────────
+/*
+ * R = 60, f = +30; d_o glides 100 → 45. The image is REAL and forms in
+ * front of the glass — d_i > 0 means "in front" for mirrors (that is where
+ * the reflected light actually crosses; you could hold a screen there).
+ *
+ * Milestone baked in (and called out on canvas): at d_o = 2f = C the image
+ * lands back on C at the SAME SIZE, m = −1 — not enlarged, not reduced.
+ * (Bug-#105 in mirror_optics was a caption that got exactly this wrong.)
+ */
+const S2 = { R: 60, f: 30, h: 10 };
+function s2state(t){
+  const u = ease(clamp01((t - 0.06) / 0.80));
+  const do_ = 100 - (100 - 45) * u;
+  const { di, m } = mirrorCalc(S2.f, do_);
+  return { do_, di, m };
+}
+function drawScene2(t){
+  const { R, f, h } = S2;
+  const v = mkView(-108, 30);
+  const { do_, di, m } = s2state(t);
+  drawAxis(); drawMirrorArc(v, R, H * 0.32);
+  markPoint(v, -R, '#94a3b8', 'C');
+  markPoint(v, -f, '#fbbf24', 'F');
+  drawObjectRays(v, R, do_, di, m, h, 1);
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  arrowV(v.px(-di), v.py(m*h), '#fbbf24', false, 'image');
+  measure(v.px(-do_), v.px(0), v.cy + 52, '#38bdf8', 'd_o = ' + do_.toFixed(0));
+  measure(v.px(-di), v.px(0), v.cy + 70, '#fbbf24', 'd_i = ' + di.toFixed(1));
+  if (Math.abs(do_ - 2*f) < 2.5){
+    g.fillStyle = '#fbbf24'; g.font = 'bold 12px ui-monospace,monospace'; g.textAlign = 'center';
+    g.fillText('at C: d_i = d_o — SAME SIZE, m = −1', W/2, 28);
+  }
+}
+
+// ── SCENE 3 — concave, object crosses inside F: the makeup mirror ─────────
+/*
+ * d_o glides 45 → 14, crossing f = 30. Outside F the real image races away
+ * in front (off the canvas edge). AT F the reflected rays leave parallel —
+ * no image. Inside F they diverge, and their dashed extensions meet BEHIND
+ * the glass: virtual, upright, magnified. Face inside F → big upright face:
+ * that is every makeup / shaving mirror.
+ */
+const S3 = { R: 60, f: 30, h: 9 };
+function s3state(t){
+  const u = ease(clamp01((t - 0.05) / 0.80));
+  const do_ = 45 - (45 - 14) * u;
+  let { di, m } = mirrorCalc(S3.f, do_);
+  if (!isFinite(di)){ ({ di, m } = mirrorCalc(S3.f, do_ + 0.01)); }
+  return { do_, di, m };
+}
+function drawScene3(t){
+  const { R, f, h } = S3;
+  const v = mkView(-68, 42);
+  const { do_, di, m } = s3state(t);
+  const nearF = Math.abs(do_ - f) < 0.8;
+  drawAxis(); drawMirrorArc(v, R, H * 0.335);
+  markPoint(v, -f, '#fbbf24', 'F');
+  drawObjectRays(v, R, do_, di, m, h, 1);
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  if (!nearF && di > 0){
+    if (v.px(-di) > 8) arrowV(v.px(-di), v.py(m*h), '#fbbf24', false, 'image');
+    else {
+      g.fillStyle = '#fbbf24'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'left';
+      g.fillText('← image racing away in front', 10, 34);
+    }
+  }
+  if (!nearF && di < 0){
+    arrowV(v.px(-di), v.py(m*h), '#a78bfa', true, 'virtual image');
+    g.fillStyle = '#a78bfa'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.textBaseline = 'bottom';
+    g.fillText('d_i = ' + di.toFixed(1).replace('-', '−') + '  (negative = BEHIND the glass)', v.px(-di), v.py(m*h) - 26);
+  }
+  if (nearF){
+    g.fillStyle = '#7dd3fc'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'left';
+    g.fillText('d_o = f : reflected rays parallel — image at infinity', v.px(-64), 30);
+  }
+}
+
+// ── SCENE 4 — convex mirror: always virtual, always small ─────────────────
+/*
+ * R = −40 → f = R/2 = −20; F and C sit BEHIND the glass. For EVERY object
+ * position 1/d_i = 1/f − 1/d_o < 0: virtual, upright, reduced. The shrink
+ * buys field of view — car door mirrors and shop security mirrors — and
+ * "objects in mirror are closer than they appear" is just |m| < 1.
+ */
+const S4 = { R: -40, f: -20, h: 10 };
+function s4state(t){
+  const u = ease(clamp01((t - 0.05) / 0.75));
+  const do_ = 55 - (55 - 25) * u;
+  const { di, m } = mirrorCalc(S4.f, do_);
+  return { do_, di, m };
+}
+function drawScene4(t){
+  const { R, f, h } = S4;
+  const v = mkView(-62, 46);
+  const { do_, di, m } = s4state(t);
+  drawAxis(); drawMirrorArc(v, R, H * 0.335);
+  markPoint(v, -f, '#fbbf24', 'F');
+  markPoint(v, -R, '#94a3b8', 'C');
+  drawObjectRays(v, R, do_, di, m, h, 1);
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  arrowV(v.px(-di), v.py(m*h), '#a78bfa', true, 'virtual image');
+  measure(v.px(-do_), v.px(0), v.cy + 52, '#38bdf8', 'd_o = ' + do_.toFixed(0));
+  measure(v.px(0), v.px(-di), v.cy + 70, '#a78bfa', 'd_i = ' + di.toFixed(1).replace('-', '−'));
+  g.fillStyle = '#64748b'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'right';
+  g.fillText('F and C live BEHIND a convex mirror', W - 12, 30);
+}
+
+// ── SCENE 5 — lens vs mirror: where "real" lives ──────────────────────────
+/*
+ * The closing exam trap, drawn side by side. Both elements run the same
+ * equation; both here use f = 25 with the object at d_o = 50 = 2f, so both
+ * make a REAL, same-size, inverted image (m = −1). The ONLY difference is
+ * WHERE it lands: the lens throws it THROUGH to the far side; the mirror
+ * throws it BACK OUT in front. Real image = where the light actually goes.
+ */
+function drawScene5(t){
+  const a1 = ease(clamp01(t / 0.30));             // lens half fades in first
+  const a2 = ease(clamp01((t - 0.32) / 0.30));    // then the mirror half
+  const cy = H/2;
+  const f = 25, do_ = 50, di = 50, h = 16;        // d_o = 2f → d_i = 2f, m = −1
+  // mini world→px mappers: lens panel on the left, mirror panel on the right
+  const mkMini = (x0, x1, wxmin, wxmax) => {
+    const S = (x1 - x0) / (wxmax - wxmin);
+    return { S, px: x => x0 + (x - wxmin) * S, py: y => cy - y * S };
+  };
+  g.save();
+  // divider
+  g.strokeStyle = '#2b3245'; g.beginPath(); g.moveTo(W/2, 30); g.lineTo(W/2, H-30); g.stroke();
+  g.beginPath(); g.moveTo(0, cy); g.lineTo(W, cy); g.stroke();
+
+  // — left: the lens (image on the FAR side) —
+  if (a1 > 0){
+    g.globalAlpha = a1;
+    const L = mkMini(W*0.04, W*0.46, -62, 62);
+    g.fillStyle = 'rgba(34,211,238,0.09)'; g.strokeStyle = '#22d3ee'; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(L.px(0), cy, 8, H*0.26, 0, 0, Math.PI*2); g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(251,191,36,0.4)'; g.lineWidth = 1.1;
+    g.beginPath(); g.moveTo(L.px(-do_), L.py(h)); g.lineTo(L.px(di), L.py(-h)); g.stroke();
+    g.beginPath(); g.moveTo(L.px(-do_), L.py(h)); g.lineTo(L.px(0), L.py(h)); g.lineTo(L.px(di), L.py(-h)); g.stroke();
+    arrowV(L.px(-do_), L.py(h), '#38bdf8', false, 'object');
+    arrowV(L.px(di), L.py(-h), '#fbbf24', false, 'image');
+    g.fillStyle = '#22d3ee'; g.font = 'bold 11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.fillText('LENS: real image goes THROUGH →', W*0.25, 34);
+  }
+  // — right: the mirror (image back IN FRONT) —
+  if (a2 > 0){
+    g.globalAlpha = a2;
+    const R = 2*f;
+    const M = mkMini(W*0.54, W*0.96, -78, 26);
+    const aR = R * M.S, cxPx = M.px(-R);
+    const th = Math.asin(Math.min(H*0.26 / aR, 0.75));
+    g.strokeStyle = '#22d3ee'; g.lineWidth = 3;
+    g.beginPath(); g.arc(cxPx, cy, aR, -th, th); g.stroke();
+    g.strokeStyle = 'rgba(251,191,36,0.4)'; g.lineWidth = 1.1;
+    g.beginPath(); g.moveTo(M.px(-do_), M.py(h)); g.lineTo(M.px(0), M.py(h)); g.lineTo(M.px(-di), M.py(-h)); g.stroke();
+    g.beginPath(); g.moveTo(M.px(-do_), M.py(h)); g.lineTo(M.px(arcHitX(R, 0)), M.py(0)); g.lineTo(M.px(-di), M.py(-h)); g.stroke();
+    arrowV(M.px(-do_) - 8, M.py(h), '#38bdf8', false, 'object');
+    arrowV(M.px(-di) + 8, M.py(-h), '#fbbf24', false, 'image');
+    g.fillStyle = '#22d3ee'; g.font = 'bold 11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.fillText('← MIRROR: real image comes BACK', W*0.75, 34);
+  }
+  g.restore();
+}
+
+// ── The storyboard ────────────────────────────────────────────────────────
+const SUB_O = 'd<sub>o</sub>', SUB_I = 'd<sub>i</sub>';
+function eqLive(f, do_, di, m, note){
+  const inv = x => (1/x).toFixed(4).replace('-0.', '−0.').replace('-', '−');
+  const diCls = di < 0 ? 'v' : 'w';
+  let out = '1/f = 1/' + SUB_O + ' + 1/' + SUB_I +
+    ' &nbsp;→&nbsp; 1/' + String(f).replace('-', '−') + ' = <span class="k">1/' + do_.toFixed(0) + '</span>' +
+    ' + <span class="' + diCls + '">1/' + di.toFixed(1).replace('-', '−') + '</span><br>' +
+    '<span class="dim">' + inv(f) + ' = </span><span class="k">' + inv(do_) + '</span>' +
+    '<span class="dim"> + </span><span class="' + diCls + '">' + inv(di) + '</span>' +
+    ' &nbsp;·&nbsp; m = −' + SUB_I + '/' + SUB_O + ' = ' + m.toFixed(2).replace('-', '−');
+  if (note) out += ' &nbsp;<span class="v">' + note + '</span>';
+  return out;
+}
+
+const SCENES = [
+  { title: '1 · f = R/2 — the burn spot, mirror edition', dur: 10, draw: drawScene1,
+    caps: [
+      { t0: 0,    html: 'A curved mirror has the same one job. Send in parallel rays — an object at infinity…' },
+      { t0: 0.45, html: 'They all reflect through one point: <span class="w">F</span>, at <span class="w">f = R/2</span> — HALF way to the centre of curvature C. Problems hand you R; halve it first.' },
+      { t0: 0.75, html: 'Satellite dishes and solar cookers are exactly this picture — energy from "infinity" piled onto F.' },
+    ],
+    eq: t => t > 0.4 ? 'f = R/2 &nbsp;·&nbsp; ' + SUB_O + ' → ∞ &nbsp;⇒&nbsp; 1/' + SUB_O + ' → 0 &nbsp;⇒&nbsp; <span class="w">' + SUB_I + ' = f = R/2</span>' : '' },
+
+  { title: '2 · Concave, object outside F — real, IN FRONT', dur: 14, draw: drawScene2,
+    caps: [
+      { t0: 0,    html: 'Bring the object in from far away — the same accounting rule runs, but the geography is new.' },
+      { t0: 0.20, html: 'The image forms <span class="w">in FRONT</span> of the mirror — the SAME side as the object. For mirrors, ' + SUB_I + ' &gt; 0 means in front: the reflected light really crosses there (a screen would catch it).' },
+      { t0: 0.46, html: 'Milestone: at <span class="k">C</span> (that is ' + SUB_O + ' = 2f) the image sits at C too — <span class="w">SAME SIZE</span>, inverted, m = −1.' },
+      { t0: 0.85, html: 'Inside C but outside F, the image slides out past C and GROWS — still real, still inverted.' },
+    ],
+    eq: t => { const s = s2state(t); return 'f = R/2 = 60/2 = 30<br>' + eqLive(S2.f, s.do_, s.di, s.m); } },
+
+  { title: '3 · Concave, inside F — the makeup mirror', dur: 13, draw: drawScene3,
+    caps: [
+      { t0: 0,    html: 'Now cross F, exactly like the lens story…' },
+      { t0: 0.28, html: 'Approaching F, the real image races away in front. AT F the reflected rays leave <span class="k">parallel</span> — no image at all.' },
+      { t0: 0.55, html: 'Inside F the reflected rays <span class="v">diverge</span>. Back-extend them (dashed): they meet <span class="v">BEHIND</span> the glass — a virtual image, upright and magnified.' },
+      { t0: 0.85, html: 'Face inside F → big upright face: every makeup / shaving mirror. ' + SUB_I + ' &lt; 0 = behind the mirror.' },
+    ],
+    eq: t => { const s = s3state(t);
+      if (Math.abs(s.do_ - S3.f) < 0.8) return SUB_O + ' = f &nbsp;⇒&nbsp; 1/' + SUB_I + ' = 0 &nbsp;⇒&nbsp; image at infinity';
+      return eqLive(S3.f, s.do_, s.di, s.m, s.di < 0 ? SUB_I + ' &lt; 0 → virtual, BEHIND' : ''); } },
+
+  { title: '4 · Convex — always virtual, always small', dur: 12, draw: drawScene4,
+    caps: [
+      { t0: 0,    html: 'Flip the curve: a <span class="v">convex</span> mirror. Now R &lt; 0, so <span class="v">f = R/2 &lt; 0</span> — F and C sit BEHIND the glass.' },
+      { t0: 0.35, html: 'Every reflected ray diverges; the dashed extensions meet behind: <span class="v">always virtual, upright, reduced</span>. No object position can change that — just like the diverging lens.' },
+      { t0: 0.70, html: 'A small image buys a WIDE view: car door mirrors, shop security mirrors. "Objects in mirror are closer than they appear" is |m| &lt; 1 written in plastic.' },
+    ],
+    eq: t => { const s = s4state(t); return 'f = R/2 = −40/2 = −20<br>' + eqLive(S4.f, s.do_, s.di, s.m, SUB_I + ' &lt; 0 for every ' + SUB_O); } },
+
+  { title: '5 · Lens vs mirror — where "real" lives', dur: 12, draw: drawScene5,
+    caps: [
+      { t0: 0,    html: 'One equation ran both stories: 1/f = 1/' + SUB_O + ' + 1/' + SUB_I + ' (with f = R/2 for mirrors). Same object distance, same f, on both sides here.' },
+      { t0: 0.35, html: 'The trap is WHERE the real image lives: a lens throws it <span class="k">THROUGH to the opposite side</span>; a mirror throws it <span class="w">back out IN FRONT</span>. Real = where the light actually goes.' },
+      { t0: 0.70, html: 'Virtual flips the same way: lens-virtual sits on the object side; mirror-virtual hides <span class="v">BEHIND</span> the glass. Decide the signs of f and ' + SUB_O + ' FIRST, then plug.' },
+    ],
+    eq: () => 'real image: lens → <span class="k">opposite side</span> · mirror → <span class="w">in FRONT</span>' +
+              ' &nbsp;|&nbsp; virtual: lens → object side · mirror → <span class="v">BEHIND</span>' +
+              ' &nbsp;|&nbsp; both: m = −' + SUB_I + '/' + SUB_O },
+];
+
+// ── Player engine: RAF loop, scene clock, scrubber, captions (plumbing) ───
+let scene = 0, t = 0, playing = true, last = performance.now(), capKey = '';
+const capEl = document.getElementById('caption');
+const eqEl = document.getElementById('eq');
+const titleEl = document.getElementById('sceneTitle');
+const scrubEl = document.getElementById('scrub');
+const btnPlay = document.getElementById('btnPlay');
+const dotsEl = document.getElementById('dots');
+let lastEq = null;
+
+SCENES.forEach((s, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot'; d.title = s.title;
+  d.onclick = () => go(i);
+  dotsEl.appendChild(d);
+});
+
+// One timeline across all scenes, so the slider scrubs the whole "video".
+const sceneStart = []; let TOTAL = 0;
+SCENES.forEach(s => { sceneStart.push(TOTAL); TOTAL += s.dur; });
+let scrubbing = false;
+function seek(sec){
+  sec = Math.max(0, Math.min(TOTAL - 0.001, sec));
+  let n = 0;
+  while (n < SCENES.length - 1 && sec >= sceneStart[n] + SCENES[n].dur) n++;
+  scene = n;
+  t = (sec - sceneStart[n]) / SCENES[n].dur;
+}
+scrubEl.addEventListener('input', () => {
+  scrubbing = true;
+  playing = false; setPlayBtn();
+  seek(scrubEl.value / 1000 * TOTAL);
+});
+scrubEl.addEventListener('change', () => { scrubbing = false; });
+
+function go(n){
+  scene = Math.max(0, Math.min(SCENES.length - 1, n));
+  t = 0; playing = true; setPlayBtn();
+}
+function setPlayBtn(){ btnPlay.textContent = playing ? '⏸ Pause' : '▶ Play'; }
+function togglePlay(){
+  if (!playing && scene === SCENES.length - 1 && t >= 1){ go(0); return; }
+  playing = !playing; setPlayBtn();
+}
+document.getElementById('btnPrev').onclick = () => go(scene - 1);
+document.getElementById('btnNext').onclick = () => go(scene + 1);
+btnPlay.onclick = togglePlay;
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowRight') go(scene + 1);
+  else if (e.key === 'ArrowLeft') go(scene - 1);
+});
+
+function updateUI(){
+  const sc = SCENES[scene];
+  titleEl.textContent = sc.title;
+  if (!scrubbing) scrubEl.value = Math.round((sceneStart[scene] + t * sc.dur) / TOTAL * 1000);
+  [...dotsEl.children].forEach((d, i) => d.classList.toggle('on', i === scene));
+  let idx = -1;
+  for (let i = 0; i < sc.caps.length; i++) if (t >= sc.caps[i].t0) idx = i;
+  const key = scene + ':' + idx;
+  if (key !== capKey){
+    capKey = key;
+    capEl.innerHTML = idx >= 0 ? sc.caps[idx].html : '';
+    capEl.classList.remove('fadein'); void capEl.offsetWidth; capEl.classList.add('fadein');
+  }
+  const eqHtml = sc.eq ? sc.eq(t) : '';
+  if (eqHtml !== lastEq){ lastEq = eqHtml; eqEl.innerHTML = eqHtml; }
+}
+
+function loop(now){
+  if (playing){
+    t += (now - last) / 1000 / SCENES[scene].dur;
+    if (t >= 1){
+      if (scene < SCENES.length - 1){ scene++; t = 0; }
+      else { t = 1; playing = false; setPlayBtn(); }
+    }
+  }
+  last = now;
+  g.clearRect(0, 0, W, H);
+  SCENES[scene].draw(t);
+  updateUI();
+  requestAnimationFrame(loop);
+}
+
+initCanvas();
+window.addEventListener('resize', initCanvas);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

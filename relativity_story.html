@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Relativity Story — Where γ Comes From · PHYS 111</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1115;color:#e8eaf0;font-family:ui-monospace,monospace;min-height:100vh;padding:16px;display:flex;justify-content:center}
+.wrap{width:100%;max-width:920px}
+h1{font-size:1.05rem;color:#22d3ee;margin-bottom:3px;letter-spacing:.04em}
+.sub{font-size:.75rem;color:#64748b;margin-bottom:12px}
+.scene-title{font-size:.85rem;color:#fbbf24;letter-spacing:.06em;margin-bottom:8px;min-height:1.2em}
+canvas{display:block;width:100%;border-radius:8px;background:#111827;border:1px solid #2d3147}
+#scrub{width:100%;margin-top:8px;accent-color:#22d3ee;cursor:pointer;height:18px}
+.caption{min-height:4.6em;padding:10px 14px;margin-top:10px;background:#1a1d27;border:1px solid #2d3147;border-radius:8px;font-size:.86rem;line-height:1.55;color:#cbd5e1}
+.caption.fadein{animation:capfade .45s ease}
+@keyframes capfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.caption .k{color:#22d3ee;font-weight:700}
+.caption .w{color:#fbbf24;font-weight:700}
+.caption .v{color:#a78bfa;font-weight:700}
+.eq{min-height:3.2em;padding:8px 14px;margin-top:8px;background:#111827;border:1px solid #163445;border-radius:8px;font-size:.84rem;line-height:1.8;color:#7dd3fc}
+.eq:empty{visibility:hidden}
+.eq .k{color:#22d3ee;font-weight:700}
+.eq .w{color:#fbbf24;font-weight:700}
+.eq .v{color:#a78bfa;font-weight:700}
+.eq .dim{color:#64748b}
+.controls{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{padding:6px 16px;border-radius:7px;border:1.5px solid #334155;background:#1e2130;color:#94a3b8;cursor:pointer;font-family:inherit;font-size:.82rem;transition:.15s}
+button:hover{border-color:#22d3ee;color:#a5f3fc}
+button.play{border-color:#22d3ee;background:#083344;color:#a5f3fc;min-width:96px}
+.dots{display:flex;gap:7px;margin-left:auto}
+.dot{width:11px;height:11px;border-radius:50%;background:#334155;cursor:pointer;transition:.15s}
+.dot.on{background:#22d3ee}
+.hint{font-size:.68rem;color:#475569;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⏱ Relativity Story — where γ comes from</h1>
+  <div class="sub">TA10 · time dilation, length contraction, simultaneity · sibling of relativity.html</div>
+  <div class="scene-title" id="sceneTitle"></div>
+  <canvas id="cvs"></canvas>
+  <input type="range" id="scrub" min="0" max="1000" step="1" value="0" title="drag to scrub through the story">
+  <div class="caption fadein" id="caption"></div>
+  <div class="eq" id="eq"></div>
+  <div class="controls">
+    <button id="btnPrev">‹ Prev</button>
+    <button id="btnPlay" class="play">⏸ Pause</button>
+    <button id="btnNext">Next ›</button>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="hint">drag the slider to scrub anywhere in the story · space = play/pause · ←/→ = scene · click a dot to replay a scene</div>
+</div>
+
+<script>
+// ─── RELATIVITY STORY — WHERE γ COMES FROM (TA10) ─────────────────────────
+// The big idea: light's speed is the same for EVERYONE (the postulate). The
+// only way the universe can keep that promise is if moving clocks tick slow
+// and moving lengths shrink — by exactly the Lorentz factor:
+//
+//   γ = 1/√(1 − β²)          β = v/c        (γ ≥ 1 always)
+//   Time dilation:      Δt = γ·Δτ    (Δτ = PROPER time — SHORTEST,
+//                                      one clock present at both events)
+//   Length contraction: L = L₀/γ     (L₀ = PROPER length — LONGEST,
+//                                      measured in the object's rest frame)
+//
+// Formula-card conventions used verbatim: Δτ proper time, L₀ proper length,
+// "moving clock runs slow", "moving rod shortens — along motion only".
+//
+// Five auto-playing scenes:
+//   1 — The stubborn postulate: chasing light does not slow it down
+//   2 — The light clock: γ DERIVED on screen from one Pythagorean triangle
+//       (β = 0.6 makes it a scaled 3-4-5: 1.5625 = 1 + 0.5625)
+//   3 — Time dilation as an exchange rate: 5.0 lab-seconds = 4.0 moving-clock
+//       seconds at β = 0.6 (exact), 3.0 at β = 0.8 (exact)
+//   4 — The muon: ground frame says "dilated lifetime", muon frame says
+//       "contracted atmosphere" — SAME verdict, two stories
+//   5 — Simultaneity breaks: one "same time", two different orderings
+//
+// Famous traps (from the card): Δt = γΔτ, never divide time by γ; L = L₀/γ,
+// never multiply length; proper time is the SHORTEST, proper length the LONGEST.
+
+// ── Canvas boot — DPR-aware, fixed height, zero-width-proof ───────────────
+// Bug-log armour (same as lens/mirror stories): const height (#8/#13/#14),
+// || fallback on width (#10/#11/#17), setTransform never multiplied.
+const H = 380;
+const cvs = document.getElementById('cvs');
+const g = cvs.getContext('2d');
+let W = 600;
+function initCanvas(){
+  const dpr = window.devicePixelRatio || 1;
+  W = cvs.clientWidth || 600;
+  cvs.style.height = H + 'px';
+  cvs.width = W * dpr;
+  cvs.height = H * dpr;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ── Tiny math + drawing toolkit (engine shared with lens/mirror stories) ──
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const ease = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+
+/*
+ * gamma — the ONE exact rule of this whole file: γ = 1/√(1 − β²).
+ *
+ * Every scene's geometry is computed from this (and from light moving at
+ * the SAME speed in every frame) — nothing is hand-drawn to "look right".
+ *
+ * Worked examples (the milestones verification asserts):
+ *   β = 0.6   →  γ = 1/√(1−0.36)  = 1/0.8 = 1.25  exactly (3-4-5 triangle)
+ *   β = 0.8   →  γ = 1/√(1−0.64)  = 1/0.6 = 5/3 ≈ 1.667 exactly
+ *   β = 0.9   →  γ ≈ 2.294
+ *   β = 0.994 →  γ ≈ 9.14  (the muon's ticket to the ground)
+ */
+function gamma(b){ return 1/Math.sqrt(1 - b*b); }
+
+function mkView(xmin, xmax){
+  const S = (W * 0.92) / (xmax - xmin);
+  const cy = H/2;
+  return { S, px: x => (x - xmin) * S + W * 0.04, py: y => cy - y * S, cy };
+}
+function drawPartial(pts, frac){
+  if (frac <= 0) return;
+  let L = 0; const seg = [];
+  for (let i = 1; i < pts.length; i++){
+    const d = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    seg.push(d); L += d;
+  }
+  let rem = L * Math.min(frac, 1);
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++){
+    const d = seg[i-1];
+    if (rem >= d){ g.lineTo(pts[i][0], pts[i][1]); rem -= d; }
+    else { const r = rem/d;
+      g.lineTo(pts[i-1][0] + (pts[i][0]-pts[i-1][0])*r, pts[i-1][1] + (pts[i][1]-pts[i-1][1])*r);
+      break; }
+  }
+  g.stroke();
+}
+function measure(x1px, x2px, ypx, color, label){
+  g.save();
+  g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(x1px, ypx); g.lineTo(x2px, ypx);
+  g.moveTo(x1px, ypx-4); g.lineTo(x1px, ypx+4);
+  g.moveTo(x2px, ypx-4); g.lineTo(x2px, ypx+4);
+  g.stroke();
+  g.font = '11px ui-monospace,monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+  g.fillText(label, (x1px+x2px)/2, ypx - 3);
+  g.restore();
+}
+function label(x, y, text, color, align){
+  g.fillStyle = color || '#7dd3fc';
+  g.font = '11px ui-monospace,monospace';
+  g.textAlign = align || 'center'; g.textBaseline = 'alphabetic';
+  g.fillText(text, x, y);
+}
+
+// ── SCENE 1 — the stubborn postulate ──────────────────────────────────────
+/*
+ * A lamp flashes. The wavefront moves at c. A train chases it at 0.5c.
+ * Classical physics promises the train should measure the light receding at
+ * 0.5c — but every experiment says the train measures c, full speed, same
+ * as the platform. Both scenes ahead are the price the universe pays to
+ * keep that promise. (c = 1 world-unit per world-second in the drawing —
+ * the wavefront and everything else move at their TRUE relative rates.)
+ */
+function drawScene1(t){
+  const v = mkView(-4, 108);
+  const T = ease(clamp01(t / 0.85)) * 72;          // world time
+  const vtr = 0.5;                                  // train speed (β = 0.5)
+  const xF = T;                                     // wavefront position (c = 1)
+  const xT = 6 + vtr * T;                           // train nose
+  // floor
+  g.strokeStyle = '#2b3245'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, v.cy + 40); g.lineTo(W, v.cy + 40); g.stroke();
+  // lamp + flash
+  g.beginPath(); g.arc(v.px(0), v.cy, 5, 0, Math.PI*2);
+  g.fillStyle = '#a5f3fc'; g.shadowColor = '#22d3ee'; g.shadowBlur = 10; g.fill(); g.shadowBlur = 0;
+  label(v.px(0), v.cy + 58, 'lamp (platform)', '#7dd3fc');
+  // expanding wavefront: leading edge dot + faint arc
+  if (T > 0.5){
+    g.strokeStyle = 'rgba(34,211,238,0.35)'; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(v.px(0), v.cy, (v.px(xF) - v.px(0)), -1.1, 1.1); g.stroke();
+    g.beginPath(); g.arc(v.px(xF), v.cy, 4, 0, Math.PI*2);
+    g.fillStyle = '#22d3ee'; g.shadowColor = '#22d3ee'; g.shadowBlur = 8; g.fill(); g.shadowBlur = 0;
+    label(v.px(xF), v.cy - 14, 'light: speed c', '#22d3ee');
+  }
+  // the chasing train
+  const trPx = v.px(xT), trW = v.S * 10, trH = 26;
+  g.fillStyle = '#1e2a3f'; g.strokeStyle = '#a78bfa'; g.lineWidth = 1.5;
+  g.fillRect(trPx - trW, v.cy + 40 - trH, trW, trH);
+  g.strokeRect(trPx - trW, v.cy + 40 - trH, trW, trH);
+  [0.25, 0.75].forEach(k => {
+    g.beginPath(); g.arc(trPx - trW + k*trW, v.cy + 40, 4, 0, Math.PI*2);
+    g.fillStyle = '#a78bfa'; g.fill();
+  });
+  label(trPx - trW/2, v.cy + 58, 'train: 0.5c', '#a78bfa');
+  // the two measurements
+  if (t > 0.35){
+    label(v.px(4), 40, 'platform measures the light: c ✓', '#22d3ee', 'left');
+    label(v.px(4), 62, 'train "should" measure: c − 0.5c = 0.5c …', '#64748b', 'left');
+    g.strokeStyle = '#64748b';
+    const wtxt = g.measureText('train "should" measure: c − 0.5c = 0.5c …').width;
+    g.beginPath(); g.moveTo(v.px(4), 58); g.lineTo(v.px(4) + wtxt, 58); g.stroke();
+  }
+  if (t > 0.55) label(v.px(4), 84, 'train ACTUALLY measures: c ✓ (every experiment, every time)', '#fbbf24', 'left');
+}
+
+// ── SCENE 2 — the light clock: γ derived on screen ────────────────────────
+/*
+ * Two identical clocks: a photon bouncing between mirrors 1 unit apart
+ * (c = 1, so one tick Δτ = 2). The right-hand clock rides a cart at
+ * β = 0.6. Its photon still moves at speed c — but along a DIAGONAL, so
+ * each tick takes longer in our frame. Freeze one half-tick and read the
+ * triangle:  hypotenuse cΔt/2, height cΔτ/2 = 1, base vΔt/2.
+ *
+ *   (cΔt/2)² = (cΔτ/2)² + (vΔt/2)²   →   Δt = Δτ/√(1−β²) = γΔτ
+ *
+ * With β = 0.6 the triangle is 0.75 : 1 : 1.25 — a scaled 3-4-5, so the
+ * accounting is exact on screen: 1.5625 = 1 + 0.5625, and γ = 2.5/2 = 1.25.
+ */
+const S2 = { b: 0.6, x0: 2.6, T_END: 5 };          // moving period 2γ = 2.5 → exactly 2 ticks in T=5
+function drawScene2(t){
+  const { b, x0, T_END } = S2;
+  const v = mkView(-0.3, 6.6);
+  const gm = gamma(b);                              // 1.25
+  const phaseA = clamp01(t / 0.55);                 // clocks running
+  const T = ease(phaseA) * T_END;
+  const yq = y => v.cy + 60 - y * (v.S * 0.9);      // clock-local y (mirrors 0..1), lifted above captions
+  const mirW = v.S * 0.55;
+  const tri = u => { const p = u % 2; return p < 1 ? p : 2 - p; };  // bounce 0→1→0
+
+  const drawClock = (xw, colr, name) => {
+    const xp = v.px(xw);
+    g.strokeStyle = colr; g.lineWidth = 3;
+    [0, 1].forEach(y => {
+      g.beginPath(); g.moveTo(xp - mirW/2, yq(y)); g.lineTo(xp + mirW/2, yq(y)); g.stroke();
+    });
+    label(xp, yq(0) + 18, name, colr);
+  };
+
+  // rest clock: photon straight up-down, ticks every Δτ = 2
+  drawClock(0.7, '#22d3ee', 'your clock  Δτ = 2');
+  g.beginPath(); g.arc(v.px(0.7), yq(tri(T)), 4.5, 0, Math.PI*2);
+  g.fillStyle = '#a5f3fc'; g.shadowColor = '#22d3ee'; g.shadowBlur = 8; g.fill(); g.shadowBlur = 0;
+
+  // moving clock: cart at x0 + vT; photon rides with it → diagonal path
+  const xM = x0 + b * T;
+  drawClock(xM, '#a78bfa', 'moving clock  β = 0.6');
+  // zigzag trail: bounce vertices every half-period γ·1 = 1.25
+  const half = gm * 1;                              // 1.25
+  const verts = [[v.px(x0), yq(0)]];
+  for (let k = 1; k * half <= T + 1e-9; k++) verts.push([v.px(x0 + b*k*half), yq(k % 2)]);
+  const uIn = (T % half) / half;                    // progress within current half-period
+  const kDone = Math.floor(T / half + 1e-9);
+  const yNow = kDone % 2 === 0 ? uIn : 1 - uIn;
+  verts.push([v.px(xM), yq(yNow)]);
+  g.strokeStyle = 'rgba(167,139,250,0.55)'; g.lineWidth = 1.4;
+  g.beginPath(); g.moveTo(verts[0][0], verts[0][1]);
+  verts.slice(1).forEach(p => g.lineTo(p[0], p[1]));
+  g.stroke();
+  g.beginPath(); g.arc(v.px(xM), yq(yNow), 4.5, 0, Math.PI*2);
+  g.fillStyle = '#c4b5fd'; g.shadowColor = '#a78bfa'; g.shadowBlur = 8; g.fill(); g.shadowBlur = 0;
+
+  // tick counters — the honest receipt that the moving clock ticks slower
+  label(v.px(0.7), 34, 'ticks: ' + (T/2).toFixed(2), '#22d3ee');
+  label(v.px(xM), 34, 'ticks: ' + (T/(2*gm)).toFixed(2), '#a78bfa');
+
+  // freeze phase: highlight the LAST half-tick triangle and read its sides
+  if (t > 0.60){
+    const a = ease(clamp01((t - 0.60) / 0.15));
+    // last half-period: top bounce at T=3.75 → bottom at T=5
+    const xa = x0 + b * 3.75, xb = x0 + b * 5;
+    g.save(); g.globalAlpha = a;
+    g.strokeStyle = '#fbbf24'; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(v.px(xa), yq(1)); g.lineTo(v.px(xb), yq(0)); g.stroke();   // hyp: light path
+    g.strokeStyle = '#22d3ee';
+    g.beginPath(); g.moveTo(v.px(xa), yq(1)); g.lineTo(v.px(xa), yq(0)); g.stroke();   // height
+    g.strokeStyle = '#a78bfa';
+    g.beginPath(); g.moveTo(v.px(xa), yq(0)); g.lineTo(v.px(xb), yq(0)); g.stroke();   // base
+    label((v.px(xa)+v.px(xb))/2 + 14, (yq(1)+yq(0))/2 - 6, 'cΔt/2 = 1.25', '#fbbf24', 'left');
+    label(v.px(xa) - 8, (yq(1)+yq(0))/2, 'cΔτ/2 = 1', '#22d3ee', 'right');
+    label((v.px(xa)+v.px(xb))/2, yq(0) + 32, 'vΔt/2 = 0.75', '#a78bfa');
+    g.restore();
+  }
+}
+
+// ── SCENE 3 — time dilation as an exchange rate ───────────────────────────
+/*
+ * Piecewise milestones (β = 0.6, 0.8, 0.9) so every number on screen is a
+ * clean receipt: in the SAME 5.0 lab-seconds, one clock riding past reads
+ * 5/γ — 4.00 s, 3.00 s, 2.18 s. The moving clock is present at both events
+ * (start and end at ITS location), so IT owns the proper time Δτ — the
+ * card's rule: proper time is the SHORTEST. A γ-β curve builds alongside.
+ */
+const S3PH = [                                      // phase start t / β / exact reading of 5/γ
+  { t0: 0.06, b: 0.6, reads: '4.00' },
+  { t0: 0.40, b: 0.8, reads: '3.00' },
+  { t0: 0.72, b: 0.9, reads: '2.18' },
+];
+function s3phase(t){
+  let ph = null;
+  for (const p of S3PH) if (t >= p.t0) ph = p;
+  return ph;
+}
+function drawScene3(t){
+  const ph = s3phase(t);
+  // γ(β) curve, bottom-left third of canvas
+  const gx0 = W*0.06, gx1 = W*0.44, gy0 = H - 46, gy1 = 64;
+  const bMax = 0.97, gMax = 4.2;
+  const gpx = b => gx0 + (b / bMax) * (gx1 - gx0);
+  const gpy = ga => gy0 - (Math.min(ga, gMax) - 1) / (gMax - 1) * (gy0 - gy1);
+  g.strokeStyle = '#2b3245'; g.lineWidth = 1;
+  g.strokeRect(gx0, gy1, gx1 - gx0, gy0 - gy1);
+  label((gx0+gx1)/2, gy0 + 26, 'β = v/c  →', '#64748b');
+  label(gx0 - 4, gy1 + 10, 'γ', '#64748b', 'right');
+  g.strokeStyle = '#22d3ee'; g.lineWidth = 2;
+  g.beginPath();
+  for (let b = 0; b <= bMax + 1e-9; b += 0.01){
+    const x = gpx(b), y = gpy(gamma(b));
+    if (b === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.stroke();
+  // milestone dots light up as their phase arrives
+  S3PH.forEach(p => {
+    if (t >= p.t0){
+      const on = ph && ph.b === p.b;
+      g.beginPath(); g.arc(gpx(p.b), gpy(gamma(p.b)), on ? 6 : 4, 0, Math.PI*2);
+      g.fillStyle = on ? '#fbbf24' : '#475569'; g.fill();
+      label(gpx(p.b), gpy(gamma(p.b)) - 12, 'β=' + p.b + ' → γ=' + (p.b === 0.8 ? '5/3' : gamma(p.b).toFixed(p.b === 0.6 ? 2 : 3)), on ? '#fbbf24' : '#64748b');
+    }
+  });
+  if (!ph){ label(W*0.7, H/2, 'pick a speed…', '#64748b'); return; }
+
+  // right side: the two clocks as filling bars over each phase
+  const u = ease(clamp01((t - ph.t0) / 0.22));      // bar fill within this phase
+  const gm = gamma(ph.b);
+  const bx0 = W*0.52, bx1 = W*0.94, bh = 26;
+  const bar = (y, frac, colr, name, reading) => {
+    g.strokeStyle = '#334155'; g.lineWidth = 1;
+    g.strokeRect(bx0, y, bx1 - bx0, bh);
+    g.fillStyle = colr; g.globalAlpha = 0.35;
+    g.fillRect(bx0, y, (bx1 - bx0) * frac, bh);
+    g.globalAlpha = 1;
+    // tick marks every 1 s of lab time
+    for (let s = 1; s < 5; s++){
+      const x = bx0 + (bx1 - bx0) * s / 5;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 6); g.stroke();
+    }
+    label(bx0, y - 8, name, colr, 'left');
+    label(bx1, y - 8, reading, colr, 'right');
+  };
+  bar(H*0.28, u, '#22d3ee', 'your lab clock (Δt)', (5*u).toFixed(2) + ' s');
+  bar(H*0.28 + 64, u / gm * 1, '#a78bfa', 'clock riding at β=' + ph.b + '  (Δτ — proper)', (5*u/gm).toFixed(2) + ' s');
+  label((bx0+bx1)/2, H*0.28 + 64 + bh + 30,
+        'same 5.0 s of lab time → the rider reads ' + ph.reads + ' s', '#fbbf24');
+}
+
+// ── SCENE 4 — the muon: one event, two stories ────────────────────────────
+/*
+ * Muons made 6.0 km up move at β = 0.994 (γ ≈ 9.14) and live Δτ = 2.2 µs.
+ * Classically they die after v·Δτ ≈ 0.66 km — yet they reach the ground.
+ *
+ * Ground story (phase A): the muon's clock is SLOW by γ: it gets
+ *   Δt = γΔτ = 20.1 µs, enough for d = vΔt ≈ 6.0 km. ✓
+ * Muon story (phase B): its clock is fine — the ATMOSPHERE is short:
+ *   L = L₀/γ = 6.0/9.14 = 0.66 km, crossed in 0.66/v = 2.2 µs = Δτ. ✓
+ * Same landing, two bookkeepings — that consistency IS relativity.
+ * (c = 0.2998 km/µs; all on-screen numbers computed, not typed.)
+ */
+const S4 = { b: 0.994, tau: 2.2, L0: 6.0, ckm: 0.2998 };
+function drawScene4(t){
+  const { b, tau, L0, ckm } = S4;
+  const gm = gamma(b);                              // ≈ 9.14
+  const vkm = b * ckm;                              // km/µs
+  const dtLab = gm * tau;                           // ≈ 20.1 µs
+  const Lc = L0 / gm;                               // ≈ 0.66 km
+  const A = t < 0.52;
+  const v = mkView(-0.4, 7.2);
+  const yGround = v.cy + 70;
+  g.strokeStyle = '#2b3245'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, yGround); g.lineTo(W, yGround); g.stroke();
+
+  if (A){
+    label(v.px(L0), yGround + 16, 'ground', '#64748b');
+    // ── phase A: ground frame — muon flies, its clock runs slow ──
+    const u = ease(clamp01((t - 0.04) / 0.42));
+    const x = L0 * u;
+    label(v.px(0), 34, 'GROUND FRAME: the muon moves, ITS clock is the slow one', '#22d3ee', 'left');
+    // classical death marker
+    const xDead = vkm * tau;                        // ≈ 0.656 km
+    g.strokeStyle = '#64748b'; g.setLineDash([5,5]);
+    g.beginPath(); g.moveTo(v.px(xDead), yGround - 66); g.lineTo(v.px(xDead), yGround + 4); g.stroke();
+    g.setLineDash([]);
+    label(v.px(xDead) + 6, yGround - 74, 'no relativity: dies here (v·Δτ = ' + xDead.toFixed(2) + ' km)', '#64748b', 'left');
+    // the muon + trail
+    g.strokeStyle = 'rgba(34,211,238,0.5)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(v.px(0), yGround - 30); g.lineTo(v.px(x), yGround - 30); g.stroke();
+    g.beginPath(); g.arc(v.px(x), yGround - 30, 6, 0, Math.PI*2);
+    g.fillStyle = '#a5f3fc'; g.shadowColor = '#22d3ee'; g.shadowBlur = 10; g.fill(); g.shadowBlur = 0;
+    // its wristwatch: proper time consumed so far vs budget Δτ
+    const lx = Math.max(v.px(x), 130);              // keep labels on-canvas at scene start
+    label(lx, yGround - 50, 'muon clock: ' + (u * tau).toFixed(2) + ' / ' + tau.toFixed(1) + ' µs', '#a78bfa');
+    label(lx, yGround - 96, 'lab time: ' + (u * dtLab).toFixed(1) + ' µs', '#22d3ee');
+    measure(v.px(0), v.px(L0), yGround + 34, '#22d3ee', 'L₀ = 6.0 km (atmosphere, ITS rest frame → longest)');
+  } else {
+    // ── phase B: muon frame — muon sits still, the atmosphere is short ──
+    const u = ease(clamp01((t - 0.56) / 0.38));
+    label(v.px(0), 34, 'MUON FRAME: the muon sits still — the ATMOSPHERE is contracted', '#a78bfa', 'left');
+    const xm = v.px(3.0);                           // muon parked mid-canvas
+    // contracted atmosphere band sliding LEFT past the muon; its trailing
+    // (right) edge is the ground surface, arriving after exactly Δτ.
+    const off = u * Lc;
+    const x1 = 3.0 - off, x2 = x1 + Lc;
+    g.fillStyle = 'rgba(34,211,238,0.12)';
+    g.fillRect(v.px(x1), yGround - 60, v.px(x2) - v.px(x1), 60);
+    g.strokeStyle = '#22d3ee'; g.lineWidth = 1;
+    g.strokeRect(v.px(x1), yGround - 60, v.px(x2) - v.px(x1), 60);
+    measure(v.px(x1), v.px(x2), yGround - 70, '#22d3ee', 'L = L₀/γ = ' + Lc.toFixed(2) + ' km');
+    label(v.px(x2) + 6, yGround - 30, '← ground, arriving', '#22d3ee', 'left');
+    // the muon, stationary, watch ticking its own proper time
+    g.beginPath(); g.arc(xm, yGround - 30, 6, 0, Math.PI*2);
+    g.fillStyle = '#c4b5fd'; g.shadowColor = '#a78bfa'; g.shadowBlur = 10; g.fill(); g.shadowBlur = 0;
+    label(xm, yGround - 50, 'muon clock: ' + (u * tau).toFixed(2) + ' / ' + tau.toFixed(1) + ' µs', '#a78bfa');
+    if (u >= 0.999) label(xm, yGround - 96, 'ground arrives in exactly Δτ = 2.2 µs ✓ same verdict', '#fbbf24');
+  }
+}
+
+// ── SCENE 5 — simultaneity breaks (and the handoff) ───────────────────────
+/*
+ * Two flashes strike the ends of a platform at the SAME lab time. Light
+ * from each spreads at c. The mid-platform observer meets both fronts
+ * together. A rider moving right at β = 0.5 RUNS INTO the right-hand front
+ * early and runs AWAY from the left one:
+ *   right seen at T = d/(c+v),  left at T = d/(c−v).
+ * "Simultaneous" was a frame-dependent claim all along — the vx/c² term of
+ * the Lorentz transform t′ = γ(t − vx/c²) is exactly this disagreement.
+ */
+const S5 = { d: 40, b: 0.5, T_END: 92 };
+function drawScene5(t){
+  const { d, b, T_END } = S5;
+  const v = mkView(-48, 48);
+  const T = clamp01(t) * T_END;                     // LINEAR map — caption t0s are simple fractions
+  const T1 = d / (1 + b);                           // rider meets right front ≈ 26.7
+  const Tp = d / 1;                                 // platform meets both = 40
+  const T2 = d / (1 - b);                           // rider meets left front = 80
+  g.strokeStyle = '#2b3245'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, v.cy); g.lineTo(W, v.cy); g.stroke();
+  // flash points
+  [-d, d].forEach(x => {
+    g.beginPath(); g.arc(v.px(x), v.cy, 4, 0, Math.PI*2); g.fillStyle = '#fbbf24'; g.fill();
+    label(v.px(x), v.cy + 20, x < 0 ? 'LEFT flash' : 'RIGHT flash', '#fbbf24');
+  });
+  // expanding wavefronts (circles of radius cT)
+  g.lineWidth = 1.5;
+  [-d, d].forEach(x => {
+    const r = (T) * v.S;
+    if (r > 1){
+      g.strokeStyle = 'rgba(251,191,36,0.5)';
+      g.beginPath(); g.arc(v.px(x), v.cy, r, 0, Math.PI*2); g.stroke();
+    }
+  });
+  // observers
+  const xp = v.px(0);                               // platform observer, fixed mid
+  const xr = v.px(b * T);                           // rider moving right from mid
+  g.beginPath(); g.arc(xp, v.cy - 14, 6, 0, Math.PI*2); g.fillStyle = '#22d3ee'; g.fill();
+  label(xp, v.cy - 28, 'platform (mid)', '#22d3ee');
+  g.beginPath(); g.arc(xr, v.cy + 14, 6, 0, Math.PI*2); g.fillStyle = '#a78bfa'; g.fill();
+  label(xr, v.cy + 34, 'rider β = 0.5 →', '#a78bfa');
+  // event badges, in the order they actually happen
+  const badge = (x, y, txt, colr) => {
+    g.fillStyle = colr; g.font = 'bold 11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.fillText(txt, x, y);
+  };
+  if (T >= T1) badge(xr, v.cy + 54, '1st: rider sees RIGHT  (T = ' + T1.toFixed(1) + ')', '#a78bfa');
+  if (T >= Tp) badge(xp, v.cy - 46, '2nd: platform sees BOTH together  (T = ' + Tp.toFixed(0) + ')', '#22d3ee');
+  if (T >= T2) badge(xr, v.cy + 72, '3rd: rider FINALLY sees LEFT  (T = ' + T2.toFixed(0) + ')', '#fbbf24');
+}
+
+// ── The storyboard ────────────────────────────────────────────────────────
+const SCENES = [
+  { title: '1 · The stubborn postulate', dur: 10, draw: drawScene1,
+    caps: [
+      { t0: 0,    html: 'A lamp flashes. The light spreads at <span class="k">c</span>. A train chases it at 0.5c.' },
+      { t0: 0.35, html: 'Classical physics promises the train should measure the light pulling away at only 0.5c…' },
+      { t0: 0.55, html: '…but the train measures <span class="w">c — full speed</span>. Everyone measures c, always. The rest of this story is the price the universe pays to keep that promise.' },
+    ],
+    eq: t => t > 0.5 ? 'postulate 2: light speed = <span class="k">c = 3.00×10⁸ m/s</span> in EVERY inertial frame — no matter who is chasing' : '' },
+
+  { title: '2 · The light clock — where γ comes from', dur: 15, draw: drawScene2,
+    caps: [
+      { t0: 0,    html: 'Two identical clocks: one photon bouncing between mirrors = one tick (Δτ = 2 here, with c = 1).' },
+      { t0: 0.22, html: 'The moving clock&#8217;s photon must travel a <span class="v">diagonal</span> — but light cannot go faster than c, so each tick simply takes <span class="v">longer</span>. Count the ticks: the moving clock falls behind.' },
+      { t0: 0.60, html: 'Freeze one half-tick. The triangle: light path <span class="w">cΔt/2</span>, mirror gap <span class="k">cΔτ/2</span>, cart advance <span class="v">vΔt/2</span>. Pythagoras does the rest.' },
+      { t0: 0.80, html: 'Solve it: <span class="w">Δt = γΔτ</span> with γ = 1/√(1−β²). At β = 0.6 this triangle is a scaled 3-4-5 — γ = 1.25 exactly. Moving clocks run slow; that is the whole derivation.' },
+    ],
+    eq: t => t > 0.62
+      ? '(cΔt/2)² = (cΔτ/2)² + (vΔt/2)² &nbsp;→&nbsp; <span class="w">1.25²</span> = <span class="k">1²</span> + <span class="v">0.75²</span> &nbsp;→&nbsp; <span class="dim">1.5625 = 1.0000 + 0.5625 ✓</span><br>Δt = Δτ/√(1−β²) = <span class="w">γ·Δτ</span> &nbsp;·&nbsp; γ = Δt/Δτ = 2.5/2 = <span class="w">1.25</span>'
+      : (t > 0.22 ? 'both photons travel at the SAME speed c — the diagonal is simply a longer path' : '') },
+
+  { title: '3 · Time dilation — the exchange rate', dur: 13, draw: drawScene3,
+    caps: [
+      { t0: 0,    html: 'γ is an exchange rate between frames. Watch it get expensive as β climbs.' },
+      { t0: 0.06, html: 'β = 0.6: in <span class="k">5.00 s</span> of your lab time, the clock riding past reads <span class="v">4.00 s</span> — exactly 5/γ = 5/1.25.' },
+      { t0: 0.40, html: 'β = 0.8: γ = 5/3, and the rider reads exactly <span class="v">3.00 s</span>. The rider&#8217;s clock is present at both events → it owns the <span class="v">proper time Δτ</span> — always the SHORTEST.' },
+      { t0: 0.72, html: 'β = 0.9: γ ≈ 2.29 — under half. Trap: <span class="w">Δt = γΔτ</span>, lab time always GROWS. If your answer made the moving clock read MORE, you divided the wrong way.' },
+    ],
+    eq: t => { const ph = s3phase(t);
+      if (!ph) return 'γ = 1/√(1 − β²)';
+      const gm = gamma(ph.b);
+      return 'γ = 1/√(1 − ' + ph.b + '²) = <span class="w">' + (ph.b === 0.8 ? '5/3' : gm.toFixed(3)) + '</span>' +
+        ' &nbsp;·&nbsp; Δτ = Δt/γ = 5.00/' + gm.toFixed(3) + ' = <span class="v">' + ph.reads + ' s</span>' +
+        ' &nbsp;<span class="dim">(proper time — the single clock at both events)</span>'; } },
+
+  { title: '4 · The muon — one landing, two stories', dur: 14, draw: drawScene4,
+    caps: [
+      { t0: 0,    html: 'Muons are born 6.0 km up, moving at β = 0.994 (γ ≈ 9.1), and live only Δτ = 2.2 µs. Classically they cover 0.66 km and die in the sky. Yet detectors on the ground catch them.' },
+      { t0: 0.26, html: 'GROUND story: the muon&#8217;s clock runs slow by γ — it gets Δt = γΔτ ≈ <span class="k">20.1 µs</span>, enough for ≈ 6.0 km. It crosses the classical death line still ticking.' },
+      { t0: 0.54, html: 'MUON story: its own clock is perfectly normal. Instead, the <span class="v">atmosphere is length-contracted</span>: L = L₀/γ ≈ 0.66 km — crossable in exactly 2.2 µs.' },
+      { t0: 0.86, html: 'Same landing, two bookkeepings — dilation in one frame IS contraction in the other. Trap: L₀ belongs to the atmosphere&#8217;s rest frame (proper length = LONGEST), not the muon&#8217;s.' },
+    ],
+    eq: t => t < 0.52
+      ? 'γ = 1/√(1−0.994²) = <span class="w">9.14</span> &nbsp;·&nbsp; Δt = γΔτ = 9.14 × 2.2 = <span class="k">20.1 µs</span> &nbsp;·&nbsp; d = vΔt = 0.994c × 20.1 µs = <span class="k">6.0 km ✓</span>'
+      : 'same γ = <span class="w">9.14</span> &nbsp;·&nbsp; L = L₀/γ = 6.0/9.14 = <span class="v">0.66 km</span> &nbsp;·&nbsp; t = L/v = 0.66/(0.994c) = <span class="v">2.2 µs = Δτ ✓</span>' },
+
+  { title: '5 · Simultaneity breaks', dur: 13, draw: drawScene5,
+    caps: [
+      { t0: 0,    html: 'Two flashes strike BOTH ends of the platform at the same lab instant. Light spreads at c from each — for everyone.' },
+      { t0: 0.29, html: 'The rider runs INTO the right-hand light and away from the left: <span class="v">right flash seen first</span> (T = d/(c+v)).' },
+      { t0: 0.43, html: 'The mid-platform observer meets both fronts <span class="k">together</span> — for the platform, the strikes WERE simultaneous.' },
+      { t0: 0.87, html: 'The rider sees the left flash far later (T = d/(c−v)). Neither is wrong: <span class="w">"same time" is frame-dependent</span> — the vx/c² term in t′ = γ(t − vx/c²) is exactly this disagreement. Now drive it yourself: <span class="k">relativity.html</span> — β sliders, Lorentz-transform mode, practice questions.' },
+    ],
+    eq: t => t > 0.29
+      ? 't′ = γ(t − <span class="w">vx/c²</span>) — same t, different x ⇒ different t′ &nbsp;·&nbsp; rider: right at T = d/(c+v) = <span class="v">26.7</span>, left at d/(c−v) = <span class="v">80</span>; platform: both at <span class="k">40</span>'
+      : '' },
+];
+
+// ── Player engine: RAF loop, scene clock, scrubber, captions (plumbing) ───
+let scene = 0, t = 0, playing = true, last = performance.now(), capKey = '';
+const capEl = document.getElementById('caption');
+const eqEl = document.getElementById('eq');
+const titleEl = document.getElementById('sceneTitle');
+const scrubEl = document.getElementById('scrub');
+const btnPlay = document.getElementById('btnPlay');
+const dotsEl = document.getElementById('dots');
+let lastEq = null;
+
+SCENES.forEach((s, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot'; d.title = s.title;
+  d.onclick = () => go(i);
+  dotsEl.appendChild(d);
+});
+
+const sceneStart = []; let TOTAL = 0;
+SCENES.forEach(s => { sceneStart.push(TOTAL); TOTAL += s.dur; });
+let scrubbing = false;
+function seek(sec){
+  sec = Math.max(0, Math.min(TOTAL - 0.001, sec));
+  let n = 0;
+  while (n < SCENES.length - 1 && sec >= sceneStart[n] + SCENES[n].dur) n++;
+  scene = n;
+  t = (sec - sceneStart[n]) / SCENES[n].dur;
+}
+scrubEl.addEventListener('input', () => {
+  scrubbing = true;
+  playing = false; setPlayBtn();
+  seek(scrubEl.value / 1000 * TOTAL);
+});
+scrubEl.addEventListener('change', () => { scrubbing = false; });
+
+function go(n){
+  scene = Math.max(0, Math.min(SCENES.length - 1, n));
+  t = 0; playing = true; setPlayBtn();
+}
+function setPlayBtn(){ btnPlay.textContent = playing ? '⏸ Pause' : '▶ Play'; }
+function togglePlay(){
+  if (!playing && scene === SCENES.length - 1 && t >= 1){ go(0); return; }
+  playing = !playing; setPlayBtn();
+}
+document.getElementById('btnPrev').onclick = () => go(scene - 1);
+document.getElementById('btnNext').onclick = () => go(scene + 1);
+btnPlay.onclick = togglePlay;
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowRight') go(scene + 1);
+  else if (e.key === 'ArrowLeft') go(scene - 1);
+});
+
+function updateUI(){
+  const sc = SCENES[scene];
+  titleEl.textContent = sc.title;
+  if (!scrubbing) scrubEl.value = Math.round((sceneStart[scene] + t * sc.dur) / TOTAL * 1000);
+  [...dotsEl.children].forEach((d, i) => d.classList.toggle('on', i === scene));
+  let idx = -1;
+  for (let i = 0; i < sc.caps.length; i++) if (t >= sc.caps[i].t0) idx = i;
+  const key = scene + ':' + idx;
+  if (key !== capKey){
+    capKey = key;
+    capEl.innerHTML = idx >= 0 ? sc.caps[idx].html : '';
+    capEl.classList.remove('fadein'); void capEl.offsetWidth; capEl.classList.add('fadein');
+  }
+  const eqHtml = sc.eq ? sc.eq(t) : '';
+  if (eqHtml !== lastEq){ lastEq = eqHtml; eqEl.innerHTML = eqHtml; }
+}
+
+function loop(now){
+  if (playing){
+    t += (now - last) / 1000 / SCENES[scene].dur;
+    if (t >= 1){
+      if (scene < SCENES.length - 1){ scene++; t = 0; }
+      else { t = 1; playing = false; setPlayBtn(); }
+    }
+  }
+  last = now;
+  g.clearRect(0, 0, W, H);
+  SCENES[scene].draw(t);
+  updateUI();
+  requestAnimationFrame(loop);
+}
+
+initCanvas();
+window.addEventListener('resize', initCanvas);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

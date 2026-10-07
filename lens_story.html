@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lens Story — How a Thin Lens Forms an Image · PHYS 111</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1115;color:#e8eaf0;font-family:ui-monospace,monospace;min-height:100vh;padding:16px;display:flex;justify-content:center}
+.wrap{width:100%;max-width:920px}
+h1{font-size:1.05rem;color:#22d3ee;margin-bottom:3px;letter-spacing:.04em}
+.sub{font-size:.75rem;color:#64748b;margin-bottom:12px}
+.scene-title{font-size:.85rem;color:#fbbf24;letter-spacing:.06em;margin-bottom:8px;min-height:1.2em}
+canvas{display:block;width:100%;border-radius:8px;background:#111827;border:1px solid #2d3147}
+#scrub{width:100%;margin-top:8px;accent-color:#22d3ee;cursor:pointer;height:18px}
+.caption{min-height:4.6em;padding:10px 14px;margin-top:10px;background:#1a1d27;border:1px solid #2d3147;border-radius:8px;font-size:.86rem;line-height:1.55;color:#cbd5e1}
+.caption.fadein{animation:capfade .45s ease}
+@keyframes capfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.caption .k{color:#22d3ee;font-weight:700}
+.caption .w{color:#fbbf24;font-weight:700}
+.caption .v{color:#a78bfa;font-weight:700}
+.eq{min-height:3.2em;padding:8px 14px;margin-top:8px;background:#111827;border:1px solid #163445;border-radius:8px;font-size:.84rem;line-height:1.8;color:#7dd3fc}
+.eq:empty{visibility:hidden}
+.eq .k{color:#22d3ee;font-weight:700}
+.eq .w{color:#fbbf24;font-weight:700}
+.eq .v{color:#a78bfa;font-weight:700}
+.eq .dim{color:#64748b}
+.controls{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{padding:6px 16px;border-radius:7px;border:1.5px solid #334155;background:#1e2130;color:#94a3b8;cursor:pointer;font-family:inherit;font-size:.82rem;transition:.15s}
+button:hover{border-color:#22d3ee;color:#a5f3fc}
+button.play{border-color:#22d3ee;background:#083344;color:#a5f3fc;min-width:96px}
+.dots{display:flex;gap:7px;margin-left:auto}
+.dot{width:11px;height:11px;border-radius:50%;background:#334155;cursor:pointer;transition:.15s}
+.dot.on{background:#22d3ee}
+.hint{font-size:.68rem;color:#475569;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔍 Lens Story — how a thin lens forms an image</h1>
+  <div class="sub">TA9 · an animated walkthrough, not a slider sim · companion to optics.html</div>
+  <div class="scene-title" id="sceneTitle"></div>
+  <canvas id="cvs"></canvas>
+  <input type="range" id="scrub" min="0" max="1000" step="1" value="0" title="drag to scrub through the story">
+  <div class="caption fadein" id="caption"></div>
+  <div class="eq" id="eq"></div>
+  <div class="controls">
+    <button id="btnPrev">‹ Prev</button>
+    <button id="btnPlay" class="play">⏸ Pause</button>
+    <button id="btnNext">Next ›</button>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="hint">drag the slider to scrub anywhere in the story · space = play/pause · ←/→ = scene · click a dot to replay a scene</div>
+</div>
+
+<script>
+// ─── LENS STORY — HOW A THIN LENS FORMS AN IMAGE (TA9) ────────────────────
+// The big idea: an object point sprays rays in ALL directions; a lens's one
+// job is to bend every ray from that point so they all meet again at ONE
+// point — the image point. Everything else in TA9 is bookkeeping on top:
+//
+//   Thin lens equation:  1/f = 1/d_o + 1/d_i     (formula card: 1/s + 1/s' = 1/f
+//                                                 — s = d_o, s' = d_i, same thing)
+//   Magnification:       m = −d_i/d_o            (m > 0 upright, m < 0 inverted)
+//   d_i > 0 → real image (far side);  d_i < 0 → VIRTUAL (same side, dashed)
+//
+// Five auto-playing scenes:
+//   1 — A point source spraying rays (why a bare screen shows only blur)
+//   2 — The lens bends the fan back to one point ("a lens's one job")
+//   3 — Object at infinity: parallel rays → image at f (Sun + magnifier burn spot)
+//   4 — Object slides in → image walks out; 1/f = 1/d_o + 1/d_i as accounting
+//   5 — Object inside f: exits diverge → virtual image (dashed back-extensions)
+//   6 — The diverging lens (f < 0): virtual, upright, reduced — for EVERY d_o
+//
+// Famous trap (scene 5): d_i < 0 is NOT an error — it is the sign convention
+// saying the image is virtual, upright, magnified. That is a magnifying glass.
+
+// ── Canvas boot — DPR-aware, fixed height, zero-width-proof ───────────────
+// Bug-log rules honoured here: height is a CONSTANT (never re-read from the
+// element after DPR scaling — bug class #8/#13/#14), width has a || fallback
+// (bug class #10/#11/#17), and the transform is SET, not multiplied.
+const H = 380;
+const cvs = document.getElementById('cvs');
+const g = cvs.getContext('2d');
+let W = 600;
+function initCanvas(){
+  const dpr = window.devicePixelRatio || 1;
+  W = cvs.clientWidth || 600;
+  cvs.style.height = H + 'px';
+  cvs.width = W * dpr;
+  cvs.height = H * dpr;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ── Tiny math + drawing toolkit ───────────────────────────────────────────
+const clamp01 = x => Math.max(0, Math.min(1, x));
+// easeInOut cubic — the "3b1b feel": nothing starts or stops abruptly.
+const ease = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+
+/*
+ * lensCalc — the one physics formula of the whole file (same as optics.html).
+ *
+ * 1/f = 1/d_o + 1/d_i solved for d_i, plus m = −d_i/d_o.
+ *
+ * Worked example: f = +30, d_o = 70:
+ *   1/d_i = 1/30 − 1/70 = 4/210  →  d_i = +52.5  (real, far side)
+ *   m = −52.5/70 = −0.75          →  inverted, 3/4 size
+ * Inside f (d_o = 16):  1/d_i = 1/30 − 1/16 < 0 → d_i = −34.3 (virtual!)
+ */
+function lensCalc(f, do_){ const di = 1/(1/f - 1/do_); return { di, m: -di/do_ }; }
+
+/*
+ * bendSlope — the thin-lens ray rule that makes every scene geometrically
+ * honest instead of hand-drawn: a ray crossing the lens plane at height y
+ * with slope u leaves with slope  u' = u − y/f.
+ *
+ * WHY it works: combined with 1/f = 1/d_o + 1/d_i this guarantees that ALL
+ * rays from an object point (−d_o, h) re-cross at exactly (d_i, m·h) — so the
+ * fan in scene 2 converges, the parallel bundle in scene 3 lands on F, and
+ * the diverging exits in scene 5 back-extend to the exact virtual image.
+ */
+function bendSlope(u, y, f){ return u - y/f; }
+
+// mkView — per-scene world→pixel mapping (world x in "cm", lens at x = 0,
+// y up). Each scene picks its own window so the action fills the canvas.
+function mkView(xmin, xmax){
+  const S = (W * 0.92) / (xmax - xmin);
+  const cy = H/2;
+  return { S, px: x => (x - xmin) * S + W * 0.04, py: y => cy - y * S, cy };
+}
+
+// drawPartial — reveal a polyline up to a fraction of its arc length.
+// This is what makes rays "travel" instead of popping in.
+function drawPartial(pts, frac){
+  if (frac <= 0) return;
+  let L = 0; const seg = [];
+  for (let i = 1; i < pts.length; i++){
+    const d = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    seg.push(d); L += d;
+  }
+  let rem = L * Math.min(frac, 1);
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++){
+    const d = seg[i-1];
+    if (rem >= d){ g.lineTo(pts[i][0], pts[i][1]); rem -= d; }
+    else { const r = rem/d;
+      g.lineTo(pts[i-1][0] + (pts[i][0]-pts[i-1][0])*r, pts[i-1][1] + (pts[i][1]-pts[i-1][1])*r);
+      break; }
+  }
+  g.stroke();
+}
+
+// drawAxis / drawLensShape / drawF / arrowV / measure — scene furniture.
+function drawAxis(){
+  g.strokeStyle = '#2b3245'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, H/2); g.lineTo(W, H/2); g.stroke();
+}
+function drawLensShape(xpx, halfH, alpha){
+  if (alpha <= 0) return;
+  g.save(); g.globalAlpha = alpha;
+  g.fillStyle = 'rgba(34,211,238,0.09)'; g.strokeStyle = '#22d3ee'; g.lineWidth = 2;
+  g.beginPath(); g.ellipse(xpx, H/2, 11, halfH, 0, 0, Math.PI*2);
+  g.fill(); g.stroke();
+  g.restore();
+}
+function drawF(v, f, label){
+  [ -f, f ].forEach(x => {
+    g.beginPath(); g.arc(v.px(x), v.cy, 3, 0, Math.PI*2);
+    g.fillStyle = '#fbbf24'; g.fill();
+    g.fillStyle = '#fbbf24'; g.font = '11px ui-monospace,monospace';
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText(label || 'F', v.px(x), v.cy + 6);
+  });
+}
+function arrowV(xpx, ytipPx, color, dashed, label){
+  const cy = H/2;
+  g.save();
+  g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 2.5;
+  if (dashed) g.setLineDash([6,5]);
+  g.beginPath(); g.moveTo(xpx, cy); g.lineTo(xpx, ytipPx); g.stroke();
+  g.setLineDash([]);
+  const dir = ytipPx < cy ? 1 : -1;              // arrowhead points away from axis
+  g.beginPath(); g.moveTo(xpx, ytipPx);
+  g.lineTo(xpx - 5, ytipPx + dir*10); g.lineTo(xpx + 5, ytipPx + dir*10);
+  g.closePath(); g.fill();
+  if (label){
+    g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.textBaseline = ytipPx < cy ? 'bottom' : 'top';
+    g.fillText(label, xpx, ytipPx + (ytipPx < cy ? -6 : 6));
+  }
+  g.restore();
+}
+function measure(x1px, x2px, ypx, color, label){
+  g.save();
+  g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(x1px, ypx); g.lineTo(x2px, ypx);
+  g.moveTo(x1px, ypx-4); g.lineTo(x1px, ypx+4);
+  g.moveTo(x2px, ypx-4); g.lineTo(x2px, ypx+4);
+  g.stroke();
+  g.font = '11px ui-monospace,monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+  g.fillText(label, (x1px+x2px)/2, ypx - 3);
+  g.restore();
+}
+
+// ── SCENE 1 — a point source sprays rays everywhere ───────────────────────
+/*
+ * WHY this scene exists: image formation makes no sense until you accept
+ * that ONE point emits rays in EVERY direction. A bare screen intercepts
+ * rays from all over the object at every spot — pure overlap, i.e. blur.
+ * (This is the "why is there no picture on my wall" question.)
+ */
+function drawScene1(t){
+  const sx = W * 0.32, sy = H/2;
+  const reveal = ease(clamp01(t / 0.45));
+  const N = 24;
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.55)'; g.lineWidth = 1.4;
+  g.shadowColor = '#22d3ee'; g.shadowBlur = 4;
+  for (let i = 0; i < N; i++){
+    const a = i / N * Math.PI * 2;
+    drawPartial([[sx, sy], [sx + Math.cos(a)*820, sy + Math.sin(a)*820]], reveal);
+  }
+  g.restore();
+  // The glowing source itself.
+  g.beginPath(); g.arc(sx, sy, 4.5 + 1.5*Math.sin(t*22), 0, Math.PI*2);
+  g.fillStyle = '#a5f3fc'; g.shadowColor = '#22d3ee'; g.shadowBlur = 12; g.fill();
+  g.shadowBlur = 0;
+  g.fillStyle = '#7dd3fc'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+  g.fillText('one point of the object', sx, sy + 26);
+  // A bare screen at right catches a smear, not a point.
+  if (t > 0.5){
+    const a2 = clamp01((t - 0.5) / 0.2);
+    const xs = W * 0.84;
+    g.save(); g.globalAlpha = a2;
+    g.strokeStyle = '#64748b'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(xs, 24); g.lineTo(xs, H-24); g.stroke();
+    // Where do the rays land? Everywhere between the extreme forward rays.
+    let yMin = H, yMax = 0;
+    for (let i = 0; i < N; i++){
+      const a = i / N * Math.PI * 2, c = Math.cos(a);
+      if (c < 0.15) continue;                       // only forward-going rays reach it
+      const y = sy + Math.tan(a) * (xs - sx);
+      if (y > 20 && y < H-20){ yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); }
+    }
+    if (yMax > yMin){
+      g.fillStyle = 'rgba(251,191,36,0.20)';
+      g.fillRect(xs - 5, yMin, 10, yMax - yMin);
+      g.fillStyle = '#fbbf24'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'right';
+      g.fillText('screen: just blur', xs - 12, 40);
+    }
+    g.restore();
+  }
+}
+
+// ── SCENE 2 — the lens's one job: one point back to one point ─────────────
+/*
+ * Setup: f = +30, point source ON AXIS at d_o = 70 → d_i = +52.5.
+ * Every ray that enters the lens at height y gets u' = u − y/f and — no
+ * matter which y — lands on (52.5, 0). Rays that MISS the lens keep going
+ * straight (dim): losing them costs brightness, never sharpness.
+ */
+const S2 = { f: 30, do_: 70 };
+function drawScene2(t){
+  const v = mkView(-85, 72);
+  const { di } = lensCalc(S2.f, S2.do_);
+  const halfH = H * 0.335;
+  const A = halfH / v.S;                            // lens aperture in world units
+  const src = [v.px(-S2.do_), v.py(0)];
+  const lensAlpha = clamp01((t - 0.08) / 0.15);
+  const reveal = ease(clamp01(t / 0.72));
+  drawAxis();
+  drawLensShape(v.px(0), halfH, lensAlpha);
+  drawF(v, S2.f);
+  // Rays through the lens: pick lens-plane heights, bend, converge.
+  const NB = 11;
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.65)'; g.lineWidth = 1.5;
+  g.shadowColor = '#22d3ee'; g.shadowBlur = 3;
+  for (let i = 0; i < NB; i++){
+    const yL = -A*0.92 + (2*A*0.92) * i/(NB-1);
+    const u  = yL / S2.do_;                         // slope from (−d_o,0) to (0,yL)
+    const u2 = bendSlope(u, yL, S2.f);
+    const xEnd = di + 20;
+    const pts = [ src, [v.px(0), v.py(yL)], [v.px(xEnd), v.py(yL + u2*xEnd)] ];
+    // Before the lens exists, rays pass straight through undisturbed.
+    if (lensAlpha < 1){
+      const straight = [ src, [v.px(72), v.py(yL * (1 + 72/S2.do_))] ];
+      g.globalAlpha = 1 - lensAlpha;
+      drawPartial(straight, reveal);
+      g.globalAlpha = lensAlpha;
+    }
+    drawPartial(pts, reveal);
+    g.globalAlpha = 1;
+  }
+  g.restore();
+  // Rays that miss the lens: straight, dim — a smaller lens = dimmer, not worse.
+  g.save();
+  g.strokeStyle = 'rgba(148,163,184,0.18)'; g.lineWidth = 1.2;
+  [1.6, 2.3, -1.6, -2.3, 2.9, -2.9].forEach(k => {
+    const yL = A * k / 1.4;
+    drawPartial([ src, [v.px(60), v.py(yL * (1 + 60/S2.do_))] ], reveal);
+  });
+  g.restore();
+  // Source dot.
+  g.beginPath(); g.arc(src[0], src[1], 4.5, 0, Math.PI*2);
+  g.fillStyle = '#a5f3fc'; g.shadowColor = '#22d3ee'; g.shadowBlur = 10; g.fill(); g.shadowBlur = 0;
+  // The payoff: the image point flashes once the rays arrive.
+  if (t > 0.68){
+    const p = clamp01((t - 0.68)/0.12);
+    g.beginPath(); g.arc(v.px(di), v.py(0), 5 + 2.5*Math.sin(t*14), 0, Math.PI*2);
+    g.fillStyle = 'rgba(251,191,36,' + (0.5 + 0.5*p) + ')';
+    g.shadowColor = '#fbbf24'; g.shadowBlur = 14; g.fill(); g.shadowBlur = 0;
+    g.fillStyle = '#fbbf24'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.fillText('image point', v.px(di), v.py(0) + 24);
+  }
+}
+
+// ── SCENE 3 — object at infinity: parallel rays land on F ─────────────────
+/*
+ * The limit d_o → ∞ kills the 1/d_o term: 1/d_i = 1/f, so d_i = f exactly.
+ * That is the magnifying-glass-and-Sun trick — the Sun is far enough that
+ * its rays arrive parallel, so its image is a hot spot one focal length
+ * behind the glass. f is not an abstract knob; you can char paper with it.
+ */
+function drawScene3(t){
+  const f = 30;
+  const v = mkView(-90, 62);
+  const halfH = H * 0.335;
+  const A = halfH / v.S;
+  const reveal = ease(clamp01(t / 0.62));
+  drawAxis();
+  drawLensShape(v.px(0), halfH, 1);
+  drawF(v, f);
+  const NB = 7;
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.7)'; g.lineWidth = 1.6;
+  g.shadowColor = '#22d3ee'; g.shadowBlur = 3;
+  for (let i = 0; i < NB; i++){
+    const y = -A*0.88 + (2*A*0.88) * i/(NB-1);
+    const u2 = bendSlope(0, y, f);                  // parallel in: u = 0
+    const xEnd = f + 22;
+    drawPartial([ [v.px(-90), v.py(y)], [v.px(0), v.py(y)], [v.px(xEnd), v.py(y + u2*xEnd)] ], reveal);
+  }
+  g.restore();
+  // Burn spot: pulsing amber glow exactly at F.
+  if (t > 0.55){
+    const p = clamp01((t - 0.55)/0.15);
+    const r = 6 + 2.5*Math.sin(t*16);
+    const grad = g.createRadialGradient(v.px(f), v.cy, 0, v.px(f), v.cy, r*3);
+    grad.addColorStop(0, 'rgba(251,191,36,' + 0.9*p + ')');
+    grad.addColorStop(1, 'rgba(251,191,36,0)');
+    g.fillStyle = grad;
+    g.beginPath(); g.arc(v.px(f), v.cy, r*3, 0, Math.PI*2); g.fill();
+    g.fillStyle = '#fbbf24'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.fillText('burn spot: d_i = f', v.px(f), v.cy + 28);
+    measure(v.px(0), v.px(f), v.cy + 46, '#fbbf24', 'f');
+  }
+  g.fillStyle = '#7dd3fc'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'left';
+  g.fillText('rays from a VERY distant object arrive parallel', v.px(-88), 30);
+}
+
+// ── SCENE 4 — the accounting rule: object in, image out ───────────────────
+/*
+ * f = +30 fixed; d_o glides 150 → 38. The equation strip below the canvas
+ * shows the actual bookkeeping: 1/f never moves, so whatever 1/d_o gains,
+ * 1/d_i must give back — which on screen looks like the image WALKING OUT
+ * from just-past-f and growing.
+ *
+ * Spot-check baked into the animation: when d_o passes 60 (= 2f), d_i = 60
+ * and m = −1 — object and image are mirror twins at 2f. Watch for it.
+ */
+const S4 = { f: 30, h: 14 };
+function s4state(t){
+  const u = ease(clamp01((t - 0.06) / 0.86));
+  const do_ = 150 - (150 - 38) * u;
+  const { di, m } = lensCalc(S4.f, do_);
+  return { do_, di, m };
+}
+function drawScene4(t){
+  const { f, h } = S4;
+  const v = mkView(-158, 165);
+  const { do_, di, m } = s4state(t);
+  const halfH = H * 0.30;
+  drawAxis();
+  drawLensShape(v.px(0), halfH, 1);
+  drawF(v, f);
+  // Principal rays (thin, warm) — the exam-drawing skill this scene trains.
+  const tip = [v.px(-do_), v.py(h)], mh = m * h, ext = 14;
+  g.save();
+  g.strokeStyle = 'rgba(251,191,36,0.38)'; g.lineWidth = 1.1;
+  // 1: parallel → exits through far F, lands on the image tip.
+  const u1 = bendSlope(0, h, f);
+  drawPartial([ tip, [v.px(0), v.py(h)], [v.px(di+ext), v.py(h + u1*(di+ext))] ], 1);
+  // 2: through the centre — undeviated.
+  const uc = -h / do_;
+  drawPartial([ tip, [v.px(di+ext), v.py(h + uc*(do_+di+ext))] ], 1);
+  // 3: through the near F → exits parallel at the image height.
+  drawPartial([ tip, [v.px(0), v.py(mh)], [v.px(di+ext), v.py(mh)] ], 1);
+  g.restore();
+  // Object (cyan, up) and image (amber, inverted since m < 0 here).
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  arrowV(v.px(di), v.py(mh), '#fbbf24', false, 'image');
+  // The two distances as labelled measures — the terms of the equation.
+  measure(v.px(-do_), v.px(0), v.cy + 52, '#38bdf8', 'd_o = ' + do_.toFixed(0));
+  measure(v.px(0), v.px(di), v.cy + 70, '#fbbf24', 'd_i = ' + di.toFixed(1));
+}
+
+// ── SCENE 5 — inside f: the virtual image (magnifying glass) ──────────────
+/*
+ * f = +30; d_o glides 45 → 16, CROSSING f on the way. Outside f: real image
+ * races off to +∞. At d_o = f: exit rays parallel, image "at infinity".
+ * Inside f: exits DIVERGE — extend them backwards (dashed) and they meet at
+ * (d_i, m·h) with d_i < 0: behind the object, upright, magnified.
+ *
+ * Trap: students see d_i < 0 and think they broke the algebra. The sign IS
+ * the answer — negative means virtual, same side as the object.
+ */
+const S5 = { f: 30, h: 10 };
+function s5state(t){
+  const u = ease(clamp01((t - 0.05) / 0.80));
+  const do_ = 45 - (45 - 16) * u;
+  const { di, m } = lensCalc(S5.f, do_);
+  return { do_, di, m };
+}
+function drawScene5(t){
+  const { f, h } = S5;
+  const v = mkView(-72, 98);
+  const { do_, di, m } = s5state(t);
+  const halfH = H * 0.335;
+  const nearF = Math.abs(do_ - f) < 0.8;            // d_o ≈ f: rays parallel, no image
+  drawAxis();
+  drawLensShape(v.px(0), halfH, 1);
+  drawF(v, f);
+  const tip = [v.px(-do_), v.py(h)];
+  const mh = m * h;
+  // Two principal rays, drawn as real light (solid).
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.75)'; g.lineWidth = 1.8;
+  g.shadowColor = '#22d3ee'; g.shadowBlur = 3;
+  const u1 = bendSlope(0, h, f);                    // parallel ray exits sloping down
+  drawPartial([ tip, [v.px(0), v.py(h)], [v.px(96), v.py(h + u1*96)] ], 1);
+  const uc = -h / do_;                              // centre ray: straight through
+  drawPartial([ tip, [v.px(96), v.py(h + uc*(do_ + 96))] ], 1);
+  g.restore();
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  if (!nearF && di > 0){
+    // Still outside f: a real image, racing right as d_o shrinks toward f.
+    if (v.px(di) < W - 8) arrowV(v.px(di), v.py(mh), '#fbbf24', false, 'image');
+    else {
+      g.fillStyle = '#fbbf24'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'right';
+      g.fillText('image → racing away to infinity →', W - 10, 34);
+    }
+  }
+  if (!nearF && di < 0){
+    // Inside f: back-extend the exits (dashed purple) to the virtual image.
+    g.save();
+    g.strokeStyle = 'rgba(167,139,250,0.8)'; g.lineWidth = 1.4; g.setLineDash([6,5]);
+    g.beginPath(); g.moveTo(v.px(0), v.py(h)); g.lineTo(v.px(di), v.py(mh)); g.stroke();
+    g.beginPath(); g.moveTo(v.px(-do_), v.py(h)); g.lineTo(v.px(di), v.py(mh)); g.stroke();
+    g.restore();
+    arrowV(v.px(di), v.py(mh), '#a78bfa', true, 'virtual image');
+    g.fillStyle = '#a78bfa'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.textBaseline = 'bottom';   // keep this note clear of the arrow label below it
+    g.fillText('d_i = ' + di.toFixed(1).replace('-', '−') + '  (negative = same side)', v.px(di), v.py(mh) - 26);
+  }
+  if (nearF){
+    g.fillStyle = '#7dd3fc'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'left';
+    g.fillText('d_o = f : exit rays parallel — image at infinity', v.px(-60), 30);
+  }
+}
+
+// ── SCENE 6 — the diverging lens: f < 0, virtual for EVERY object ─────────
+/*
+ * f = −30; d_o glides 70 → 25. The SAME bending rule u' = u − y/f applies,
+ * but f < 0 flips the kick OUTWARD: exits spread, and only their dashed
+ * back-extensions meet. 1/d_i = 1/f − 1/d_o is negative for every d_o, so
+ * the image is always virtual, upright, reduced — parked between the lens
+ * and F on the object side. There is no object position that changes this.
+ *
+ * Worked example: f = −30, d_o = 25:
+ *   1/d_i = −1/30 − 1/25  →  d_i = −13.6;  m = +0.55  (upright, ~half size)
+ */
+const S6 = { f: -30, h: 12 };
+function s6state(t){
+  const u = ease(clamp01((t - 0.05) / 0.70));
+  const do_ = 70 - (70 - 25) * u;
+  const { di, m } = lensCalc(S6.f, do_);
+  return { do_, di, m };
+}
+// A diverging lens reads as ")(": two inward-curved faces.
+function drawDivergingLens(xpx, halfH, alpha){
+  if (alpha <= 0) return;
+  g.save(); g.globalAlpha = alpha;
+  g.fillStyle = 'rgba(34,211,238,0.09)'; g.strokeStyle = '#22d3ee'; g.lineWidth = 2;
+  const cy = H/2;
+  g.beginPath();
+  g.moveTo(xpx - 8, cy - halfH);
+  g.quadraticCurveTo(xpx - 1, cy, xpx - 8, cy + halfH);
+  g.lineTo(xpx + 8, cy + halfH);
+  g.quadraticCurveTo(xpx + 1, cy, xpx + 8, cy - halfH);
+  g.closePath(); g.fill(); g.stroke();
+  g.restore();
+}
+function drawScene6(t){
+  const { f, h } = S6;
+  const v = mkView(-88, 62);
+  const { do_, di, m } = s6state(t);
+  const halfH = H * 0.335;
+  drawAxis();
+  drawDivergingLens(v.px(0), halfH, 1);
+  drawF(v, Math.abs(f));
+  const tip = [v.px(-do_), v.py(h)];
+  const mh = m * h;
+  const reveal = ease(clamp01(t / 0.5));
+  // Fan from the object tip; every exit bends AWAY (u' = u − y/f, f < 0).
+  const heights = [h, h*0.5, 0, -h*0.6, -h*1.2];
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.7)'; g.lineWidth = 1.6;
+  g.shadowColor = '#22d3ee'; g.shadowBlur = 3;
+  heights.forEach(yL => {
+    const u  = (yL - h) / do_;
+    const u2 = bendSlope(u, yL, f);
+    drawPartial([ tip, [v.px(0), v.py(yL)], [v.px(58), v.py(yL + u2*58)] ], reveal);
+  });
+  g.restore();
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  // Back-extensions: every exit, traced backwards, crosses (d_i, m·h).
+  // Fade in WITH the bent rays — the virtual construction is the payoff,
+  // so it must be on screen whenever bent exits are.
+  const extA = ease(clamp01((t - 0.22) / 0.15));
+  if (extA > 0){
+    g.save();
+    g.globalAlpha = extA;
+    g.strokeStyle = 'rgba(167,139,250,0.75)'; g.lineWidth = 1.3; g.setLineDash([6,5]);
+    heights.forEach(yL => {
+      g.beginPath(); g.moveTo(v.px(0), v.py(yL)); g.lineTo(v.px(di), v.py(mh)); g.stroke();
+    });
+    g.setLineDash([]);
+    arrowV(v.px(di), v.py(mh), '#a78bfa', true, 'virtual image');
+    g.fillStyle = '#a78bfa'; g.font = '11px ui-monospace,monospace'; g.textAlign = 'center';
+    g.textBaseline = 'bottom';
+    g.fillText('d_i = ' + di.toFixed(1).replace('-', '−') + '  — between lens and F, always', v.px(di), v.py(mh) - 26);
+    g.restore();
+  }
+}
+
+// ── The storyboard: titles, durations, captions, equation strips ──────────
+const SUB_O = 'd<sub>o</sub>', SUB_I = 'd<sub>i</sub>';
+function eqLive(f, do_, di, m, virtualNote){
+  const inv = x => (1/x).toFixed(4).replace('-0.', '−0.').replace('-', '−');
+  const diCls = di < 0 ? 'v' : 'w';
+  let out = '1/f = 1/' + SUB_O + ' + 1/' + SUB_I +
+    ' &nbsp;→&nbsp; 1/' + String(f).replace('-', '−') + ' = <span class="k">1/' + do_.toFixed(0) + '</span>' +
+    ' + <span class="' + diCls + '">1/' + di.toFixed(1).replace('-', '−') + '</span><br>' +
+    '<span class="dim">' + inv(f) + ' = </span><span class="k">' + inv(do_) + '</span>' +
+    '<span class="dim"> + </span><span class="' + diCls + '">' + inv(di) + '</span>' +
+    ' &nbsp;·&nbsp; m = −' + SUB_I + '/' + SUB_O + ' = ' + m.toFixed(2).replace('-', '−');
+  if (virtualNote) out += ' &nbsp;<span class="v">' + virtualNote + '</span>';
+  return out;
+}
+
+const SCENES = [
+  { title: '1 · A point of light', dur: 10, draw: drawScene1,
+    caps: [
+      { t0: 0,    html: 'Every point of a glowing object throws off light rays in <span class="k">all directions</span>. Follow just one point.' },
+      { t0: 0.48, html: 'Put up a bare screen and every spot on it gets hit by rays from everywhere — a <span class="w">blur</span>, never a picture. Something has to SORT the rays.' },
+    ],
+    eq: () => '' },
+
+  { title: '2 · The lens has one job', dur: 12, draw: drawScene2,
+    caps: [
+      { t0: 0,    html: 'Same spraying point — now with a lens in the way.' },
+      { t0: 0.28, html: "A lens's <span class=\"k\">one job</span>: bend every ray from one point so they all meet again at <span class=\"k\">one point</span>." },
+      { t0: 0.70, html: 'That meeting point is the <span class="w">image point</span>. Rays that miss the lens just travel on — a bigger lens only makes the image <em>brighter</em>, never sharper.' },
+    ],
+    eq: t => t > 0.3 ? '<span class="dim">every ray, any height y, same landing spot — that is what 1/f = 1/' + SUB_O + ' + 1/' + SUB_I + ' encodes</span>' : '' },
+
+  { title: '3 · Object at infinity — the burn spot', dur: 11, draw: drawScene3,
+    caps: [
+      { t0: 0,    html: 'Send the object VERY far away. By the time its rays get here they are practically <span class="k">parallel</span>.' },
+      { t0: 0.42, html: 'Parallel rays all reconverge at one special distance behind the lens: the <span class="w">focal length f</span>.' },
+      { t0: 0.66, html: 'The Sun counts as "at infinity" — a magnifying glass drops its image exactly at <span class="w">f</span>. That concentrated spot is the classic paper-burning trick.' },
+    ],
+    eq: t => t > 0.4 ? SUB_O + ' → ∞ &nbsp;⇒&nbsp; 1/' + SUB_O + ' → 0 &nbsp;⇒&nbsp; 1/' + SUB_I + ' = 1/f &nbsp;⇒&nbsp; <span class="w">' + SUB_I + ' = f</span>' : '' },
+
+  { title: '4 · The accounting rule', dur: 14, draw: drawScene4,
+    caps: [
+      { t0: 0,    html: 'Now slide the object in from far away — and keep the books balanced.' },
+      { t0: 0.16, html: 'The accounting rule: <span class="w">1/f</span> = <span class="k">1/' + SUB_O + '</span> + <span class="w">1/' + SUB_I + '</span>. (The formula card writes s and s′ for the same two distances.)' },
+      { t0: 0.48, html: 'f is FIXED. As ' + SUB_O + ' shrinks, <span class="k">1/' + SUB_O + '</span> grows — so <span class="w">1/' + SUB_I + '</span> must shrink: the image <span class="w">walks out</span> and grows. Watch the two terms trade below.' },
+      { t0: 0.82, html: 'Halfway milestone worth memorizing: at ' + SUB_O + ' = 2f the trade is even — ' + SUB_I + ' = 2f and m = −1, a same-size inverted twin.' },
+    ],
+    eq: t => { const s = s4state(t); return eqLive(S4.f, s.do_, s.di, s.m); } },
+
+  { title: '5 · Inside f — the virtual image', dur: 13, draw: drawScene5,
+    caps: [
+      { t0: 0,    html: 'One more push: bring the object <span class="k">inside f</span>. First the real image races away to infinity…' },
+      { t0: 0.40, html: '…then past f the exit rays <span class="v">diverge</span>. They never meet on the far side. No real image exists.' },
+      { t0: 0.60, html: 'But trace the exits <span class="v">backwards</span> (dashed): they all appear to come from one point behind the object — a <span class="v">virtual image</span>, upright and magnified.' },
+      { t0: 0.84, html: SUB_I + ' comes out <span class="v">negative</span>. Not an error — negative IS the sign convention for "virtual, same side". You are holding a magnifying glass.' },
+    ],
+    eq: t => { const s = s5state(t);
+      if (Math.abs(s.do_ - S5.f) < 0.8) return SUB_O + ' = f &nbsp;⇒&nbsp; 1/' + SUB_I + ' = 0 &nbsp;⇒&nbsp; image at infinity';
+      return eqLive(S5.f, s.do_, s.di, s.m, s.di < 0 ? SUB_I + ' &lt; 0 → virtual, upright' : ''); } },
+
+  { title: '6 · The diverging lens', dur: 12, draw: drawScene6,
+    caps: [
+      { t0: 0,    html: 'Flip the lens: a <span class="v">diverging</span> (concave) lens. Same equation — but now <span class="v">f &lt; 0</span>.' },
+      { t0: 0.30, html: 'The same bending rule now kicks every ray <span class="v">outward</span>. The exits spread — they never meet.' },
+      { t0: 0.55, html: 'Their dashed back-extensions DO meet, on the object side: a <span class="v">virtual image</span> — upright, reduced, trapped between the lens and F.' },
+      { t0: 0.82, html: 'With f &lt; 0, 1/' + SUB_I + ' = 1/f − 1/' + SUB_O + ' is negative for EVERY object position — a diverging lens alone can never throw a real image.' },
+    ],
+    eq: t => { const s = s6state(t); return eqLive(S6.f, s.do_, s.di, s.m, SUB_I + ' &lt; 0 for every ' + SUB_O); } },
+];
+
+// ── Player engine: RAF loop, scene clock, captions, controls (plumbing) ───
+let scene = 0, t = 0, playing = true, last = performance.now(), capKey = '';
+const capEl = document.getElementById('caption');
+const eqEl = document.getElementById('eq');
+const titleEl = document.getElementById('sceneTitle');
+const scrubEl = document.getElementById('scrub');
+const btnPlay = document.getElementById('btnPlay');
+const dotsEl = document.getElementById('dots');
+let lastEq = null;
+
+SCENES.forEach((s, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot'; d.title = s.title;
+  d.onclick = () => go(i);
+  dotsEl.appendChild(d);
+});
+
+// One timeline across all five scenes, so the slider scrubs the whole "video".
+const sceneStart = []; let TOTAL = 0;
+SCENES.forEach(s => { sceneStart.push(TOTAL); TOTAL += s.dur; });
+let scrubbing = false;
+function seek(sec){
+  sec = Math.max(0, Math.min(TOTAL - 0.001, sec));
+  let n = 0;
+  while (n < SCENES.length - 1 && sec >= sceneStart[n] + SCENES[n].dur) n++;
+  scene = n;
+  t = (sec - sceneStart[n]) / SCENES[n].dur;
+}
+scrubEl.addEventListener('input', () => {
+  scrubbing = true;
+  playing = false; setPlayBtn();          // scrubbing = you are the clock now
+  seek(scrubEl.value / 1000 * TOTAL);
+});
+scrubEl.addEventListener('change', () => { scrubbing = false; });
+
+function go(n){
+  scene = Math.max(0, Math.min(SCENES.length - 1, n));
+  t = 0; playing = true; setPlayBtn();
+}
+function setPlayBtn(){ btnPlay.textContent = playing ? '⏸ Pause' : '▶ Play'; }
+function togglePlay(){
+  // At the very end, Play means "run the story again".
+  if (!playing && scene === SCENES.length - 1 && t >= 1){ go(0); return; }
+  playing = !playing; setPlayBtn();
+}
+document.getElementById('btnPrev').onclick = () => go(scene - 1);
+document.getElementById('btnNext').onclick = () => go(scene + 1);
+btnPlay.onclick = togglePlay;
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowRight') go(scene + 1);
+  else if (e.key === 'ArrowLeft') go(scene - 1);
+});
+
+function updateUI(){
+  const sc = SCENES[scene];
+  titleEl.textContent = sc.title;
+  // Mirror playhead → slider (but never fight the hand that is dragging it).
+  if (!scrubbing) scrubEl.value = Math.round((sceneStart[scene] + t * sc.dur) / TOTAL * 1000);
+  [...dotsEl.children].forEach((d, i) => d.classList.toggle('on', i === scene));
+  // Caption: latest entry whose start time has passed; crossfade on change.
+  let idx = -1;
+  for (let i = 0; i < sc.caps.length; i++) if (t >= sc.caps[i].t0) idx = i;
+  const key = scene + ':' + idx;
+  if (key !== capKey){
+    capKey = key;
+    capEl.innerHTML = idx >= 0 ? sc.caps[idx].html : '';
+    capEl.classList.remove('fadein'); void capEl.offsetWidth; capEl.classList.add('fadein');
+  }
+  const eqHtml = sc.eq ? sc.eq(t) : '';
+  if (eqHtml !== lastEq){ lastEq = eqHtml; eqEl.innerHTML = eqHtml; }
+}
+
+function loop(now){
+  if (playing){
+    t += (now - last) / 1000 / SCENES[scene].dur;
+    if (t >= 1){
+      if (scene < SCENES.length - 1){ scene++; t = 0; }
+      else { t = 1; playing = false; setPlayBtn(); }
+    }
+  }
+  last = now;
+  g.clearRect(0, 0, W, H);
+  SCENES[scene].draw(t);
+  updateUI();
+  requestAnimationFrame(loop);
+}
+
+initCanvas();
+window.addEventListener('resize', initCanvas);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
