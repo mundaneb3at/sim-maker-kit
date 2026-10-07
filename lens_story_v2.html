@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lens Story v2 — How a Thin Lens Forms an Image · PHYS 111</title>
+<style>
+html{overflow-y:scroll}                       /* G3: scrollbar space always reserved — no sideways jump (B2) */
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1115;color:#e8eaf0;font-family:ui-monospace,monospace;min-height:100vh;padding:16px;display:flex;justify-content:center}
+.wrap{width:100%;max-width:920px}
+h1{font-size:1.05rem;color:#22d3ee;margin-bottom:3px;letter-spacing:.04em}
+.sub{font-size:.75rem;color:#64748b;margin-bottom:12px}
+.scene-title{font-size:.85rem;color:#fbbf24;letter-spacing:.06em;margin-bottom:8px;min-height:1.2em}
+canvas{display:block;width:100%;border-radius:8px;background:#111827;border:1px solid #2d3147}
+#scrub{width:100%;margin-top:8px;accent-color:#22d3ee;cursor:pointer;height:18px}
+/* G3: caption + eq strip reserve their full height (3 lines / 2 lines) from first paint */
+.caption{min-height:calc(4.65em + 22px);padding:10px 14px;margin-top:10px;background:#1a1d27;border:1px solid #2d3147;border-radius:8px;font-size:.86rem;line-height:1.55;color:#cbd5e1}
+.caption.fadein{animation:capfade .45s ease}
+@keyframes capfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.caption .k{color:#22d3ee;font-weight:700}
+.caption .w{color:#fbbf24;font-weight:700}
+.caption .v{color:#a78bfa;font-weight:700}
+.eq{min-height:76px;                            /* 2 lines incl. <sub> line-box growth (measured 71 px) */padding:8px 14px;margin-top:8px;background:#111827;border:1px solid #163445;border-radius:8px;font-size:.84rem;line-height:1.8;color:#7dd3fc}
+.eq .k{color:#22d3ee;font-weight:700}
+.eq .w{color:#fbbf24;font-weight:700}
+.eq .v{color:#a78bfa;font-weight:700}
+.eq .dim{color:#64748b}
+.controls{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button{padding:6px 16px;border-radius:7px;border:1.5px solid #334155;background:#1e2130;color:#94a3b8;cursor:pointer;font-family:inherit;font-size:.82rem;transition:.15s}
+button:hover{border-color:#22d3ee;color:#a5f3fc}
+button.play{border-color:#22d3ee;background:#083344;color:#a5f3fc;min-width:96px}
+.dots{display:flex;gap:7px;margin-left:auto}
+.dot{width:11px;height:11px;border-radius:50%;background:#334155;cursor:pointer;transition:.15s}
+.dot.on{background:#22d3ee}
+.hint{font-size:.68rem;color:#475569;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔍 Lens Story — how a thin lens forms an image</h1>
+  <div class="sub">TA9 · an animated walkthrough, not a slider sim · companion to optics.html</div>
+  <div class="scene-title" id="sceneTitle"></div>
+  <canvas id="cvs"></canvas>
+  <input type="range" id="scrub" min="0" max="1000" step="1" value="0" title="drag to scrub through the story">
+  <div class="caption fadein" id="caption"></div>
+  <div class="eq" id="eq"></div>
+  <div class="controls">
+    <button id="btnPrev">‹ Prev</button>
+    <button id="btnPlay" class="play">⏸ Pause</button>
+    <button id="btnNext">Next ›</button>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="hint">drag the slider to scrub anywhere in the story · space = play/pause · ←/→ = scene · click a dot to replay a scene</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.15.0/gsap.min.js"></script>
+<script>
+// ─── LENS STORY v2 — HOW A THIN LENS FORMS AN IMAGE (TA9) ─────────────────
+// v2 = v1 (lens_story.html) rebuilt beat-for-beat from the storyboard:
+//   ..\02-storyboard\lens-storyboard.md   (beats s<scene>b<n>)
+//   ..\_shared\engine-rules.md            (G1–G7)
+// The PHYSICS is v1 verbatim — lensCalc, bendSlope, every world window and
+// f / d_o / h number. What changed is the ENGINE (one GSAP timeline owns the
+// clock), the GLOW (sprites, no shadowBlur), and the BEATS (holds, label
+// placer, caption timing). The big idea is unchanged:
+//
+//   An object point sprays rays in ALL directions; a lens's one job is to
+//   bend every ray from that point so they all meet again at ONE point.
+//
+//   Thin lens equation:  1/f = 1/d_o + 1/d_i     (formula card: 1/s + 1/s' = 1/f
+//                                                 — s = d_o, s' = d_i, same thing)
+//   Magnification:       m = −d_i/d_o            (m > 0 upright, m < 0 inverted)
+//   d_i > 0 → real image (far side);  d_i < 0 → VIRTUAL (same side, dashed)
+//
+// Famous trap (scene 5): d_i < 0 is NOT an error — it is the sign convention
+// saying the image is virtual, upright, magnified. That is a magnifying glass.
+
+// ── Canvas boot — DPR-aware, fixed height, zero-width-proof ───────────────
+// Bug-log rules honoured here: height is a CONSTANT (never re-read from the
+// element after DPR scaling — bug class #8/#13/#14), width has a || fallback
+// (bug class #10/#11/#17), and the transform is SET, not multiplied.
+const H = 380;
+const cvs = document.getElementById('cvs');
+const g = cvs.getContext('2d');
+let W = 600;
+function initCanvas(){
+  const dpr = window.devicePixelRatio || 1;
+  W = cvs.clientWidth || 600;
+  cvs.style.height = H + 'px';
+  cvs.width = W * dpr;
+  cvs.height = H * dpr;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ── Tiny math + drawing toolkit ───────────────────────────────────────────
+const clamp01 = x => Math.max(0, Math.min(1, x));
+// easeInOut cubic — the "3b1b feel": nothing starts or stops abruptly.
+const ease = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+// Inverse of ease() by bisection (ease is monotonic). Used to find the exact
+// moment a glide passes a milestone, so the hold lands ON it (G7) instead of
+// at a hand-estimated time (the caption-timing-vs-ease bug class).
+function easeInv(y){ let lo = 0, hi = 1; for (let i = 0; i < 60; i++){ const mid = (lo + hi)/2; if (ease(mid) < y) lo = mid; else hi = mid; } return (lo + hi)/2; }
+
+/*
+ * lensCalc — the one physics formula of the whole file (same as optics.html).
+ *
+ * 1/f = 1/d_o + 1/d_i solved for d_i, plus m = −d_i/d_o.
+ *
+ * Worked example: f = +30, d_o = 70:
+ *   1/d_i = 1/30 − 1/70 = 4/210  →  d_i = +52.5  (real, far side)
+ *   m = −52.5/70 = −0.75          →  inverted, 3/4 size
+ * Inside f (d_o = 16):  1/d_i = 1/30 − 1/16 < 0 → d_i = −34.3 (virtual!)
+ */
+function lensCalc(f, do_){ const di = 1/(1/f - 1/do_); return { di, m: -di/do_ }; }
+
+/*
+ * bendSlope — the thin-lens ray rule that makes every scene geometrically
+ * honest instead of hand-drawn: a ray crossing the lens plane at height y
+ * with slope u leaves with slope  u' = u − y/f.
+ *
+ * WHY it works: combined with 1/f = 1/d_o + 1/d_i this guarantees that ALL
+ * rays from an object point (−d_o, h) re-cross at exactly (d_i, m·h) — so the
+ * fan in scene 2 converges, the parallel bundle in scene 3 lands on F, and
+ * the diverging exits in scene 5 back-extend to the exact virtual image.
+ */
+function bendSlope(u, y, f){ return u - y/f; }
+
+// mkView — per-scene world→pixel mapping (world x in "cm", lens at x = 0,
+// y up). Each scene picks its own window so the action fills the canvas.
+function mkView(xmin, xmax){
+  const S = (W * 0.92) / (xmax - xmin);
+  const cy = H/2;
+  return { S, px: x => (x - xmin) * S + W * 0.04, py: y => cy - y * S, cy };
+}
+
+// pathPartial / drawPartial — reveal a polyline up to a fraction of its arc
+// length. This is what makes rays "travel" instead of popping in.
+// pathPartial only ADDS to the current path, so a whole bundle of rays can be
+// stroked in one call (G1: one stroke per bundle, not one per ray).
+function pathPartial(pts, frac){
+  if (frac <= 0) return;
+  let L = 0; const seg = [];
+  for (let i = 1; i < pts.length; i++){
+    const d = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+    seg.push(d); L += d;
+  }
+  let rem = L * Math.min(frac, 1);
+  g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++){
+    const d = seg[i-1];
+    if (rem >= d){ g.lineTo(pts[i][0], pts[i][1]); rem -= d; }
+    else { const r = rem/d;
+      g.lineTo(pts[i-1][0] + (pts[i][0]-pts[i-1][0])*r, pts[i-1][1] + (pts[i][1]-pts[i-1][1])*r);
+      break; }
+  }
+}
+function drawPartial(pts, frac){ if (frac <= 0) return; g.beginPath(); pathPartial(pts, frac); g.stroke(); }
+
+// G1 — ray glow WITHOUT shadowBlur: one path, stroked twice. The wide
+// low-alpha stroke underneath is the glow; the thin one on top is the ray.
+// paths = [[pts, frac], …]
+function strokeBundle(paths, core, w, under){
+  g.beginPath();
+  paths.forEach(p => pathPartial(p[0], p[1]));
+  if (under){ g.lineWidth = w * 3.4; g.strokeStyle = under; g.stroke(); }   // under = null: skip it (dense bundles, see scenes 1-2)
+  g.lineWidth = w;       g.strokeStyle = core;  g.stroke();
+}
+
+// G1 — glow dots are PRE-RENDERED sprites (a radial gradient drawn once),
+// then drawImage'd scaled each frame. No gradient and no blur per frame.
+function mkGlow(rgb){
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(' + rgb + ',1)');
+  gr.addColorStop(0.35, 'rgba(' + rgb + ',0.35)');
+  gr.addColorStop(1, 'rgba(' + rgb + ',0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  return c;
+}
+const GLOW = { cyan: mkGlow('34,211,238'), amber: mkGlow('251,191,36') };
+function glow(spr, x, y, r, a){
+  const ga = g.globalAlpha; g.globalAlpha = ga * a;
+  g.drawImage(spr, x - r, y - r, 2*r, 2*r);
+  g.globalAlpha = ga;
+}
+
+// G4 — the label placer. EVERY canvas text label goes through label(): it
+// nudges the label away (in the direction it already points) from any label
+// box already placed this frame, so labels never pile up (B4).
+// `placed` is reset at the top of every scene draw (see SCENES wrapper).
+const FONT = '11px ui-monospace,monospace';
+const SLATE = '#94a3b8';                          // G6: F markers + measures stay muted
+let placed = [];
+function label(x, y, text, color, align, base){
+  align = align || 'center'; base = base || 'top';
+  g.font = FONT;
+  const w = g.measureText(text).width, h = 13;
+  let x0 = align === 'center' ? x - w/2 : align === 'right' ? x - w : x;
+  let y0 = base === 'bottom' ? y - h : y;
+  const hit = b => x0 < b[2] + 2 && x0 + w > b[0] - 2 && y0 < b[3] + 2 && y0 + h > b[1] - 2;
+  const dir = base === 'bottom' ? -1 : 1;
+  for (let k = 0; k < 8 && placed.some(hit); k++) y0 += dir * (h + 2);
+  x0 = Math.max(2, Math.min(W - w - 2, x0));
+  y0 = Math.max(2, Math.min(H - h - 2, y0));
+  placed.push([x0, y0, x0 + w, y0 + h]);
+  // dark chip behind the text so rays passing underneath never cut through it
+  g.fillStyle = 'rgba(17,24,39,0.78)'; g.fillRect(x0 - 3, y0 - 1, w + 6, h + 1);
+  g.fillStyle = color; g.textAlign = 'left'; g.textBaseline = 'top';
+  g.fillText(text, x0, y0);
+}
+
+// drawAxis / drawLensShape / drawF / arrowV / measure — scene furniture.
+function drawAxis(){
+  g.strokeStyle = '#2b3245'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, H/2); g.lineTo(W, H/2); g.stroke();
+}
+function drawLensShape(xpx, halfH, alpha){
+  if (alpha <= 0) return;
+  g.save(); g.globalAlpha = alpha;
+  g.fillStyle = 'rgba(34,211,238,0.09)'; g.strokeStyle = '#22d3ee'; g.lineWidth = 2;
+  g.beginPath(); g.ellipse(xpx, H/2, 11, halfH, 0, 0, Math.PI*2);
+  g.fill(); g.stroke();
+  g.restore();
+}
+function drawF(v, f, text){
+  [ -f, f ].forEach(x => {
+    g.beginPath(); g.arc(v.px(x), v.cy, 3, 0, Math.PI*2);
+    g.fillStyle = SLATE; g.fill();
+    label(v.px(x), v.cy + 6, text || 'F', SLATE, 'center', 'top');
+  });
+}
+function arrowV(xpx, ytipPx, color, dashed, text){
+  const cy = H/2;
+  g.save();
+  g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 2.5;
+  if (dashed) g.setLineDash([6,5]);
+  g.beginPath(); g.moveTo(xpx, cy); g.lineTo(xpx, ytipPx); g.stroke();
+  g.setLineDash([]);
+  const dir = ytipPx < cy ? 1 : -1;              // arrowhead points away from axis
+  g.beginPath(); g.moveTo(xpx, ytipPx);
+  g.lineTo(xpx - 5, ytipPx + dir*10); g.lineTo(xpx + 5, ytipPx + dir*10);
+  g.closePath(); g.fill();
+  if (text){
+    if (ytipPx < cy) label(xpx, ytipPx - 6, text, color, 'center', 'bottom');
+    else             label(xpx, ytipPx + 6, text, color, 'center', 'top');
+  }
+  g.restore();
+}
+function measure(x1px, x2px, ypx, color, text){
+  g.save();
+  g.strokeStyle = color; g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(x1px, ypx); g.lineTo(x2px, ypx);
+  g.moveTo(x1px, ypx-4); g.lineTo(x1px, ypx+4);
+  g.moveTo(x2px, ypx-4); g.lineTo(x2px, ypx+4);
+  g.stroke();
+  label((x1px+x2px)/2, ypx - 3, text, color, 'center', 'bottom');
+  g.restore();
+}
+
+// ── The beat map: durations, holds, beat times (storyboard → timeline) ────
+/*
+ * Each scene has a "v1 clock" (v, seconds, 0 … dur) that drives the physics
+ * exactly like v1's t·dur, and a TIMELINE clock (τ, seconds) that is v plus
+ * the holds. A HOLD (G7) is a stretch of τ where v is frozen: the physics
+ * parameter stops, the caption stays, the beat lingers. Beat times are given
+ * in v seconds and converted to τ here — the GSAP labels are built from them.
+ *
+ * Worked example, scene 1: dur 10, hold 1.0 s at v = 8.5.
+ *   τ 0 → 8.5  : v runs 0 → 8.5      τ 8.5 → 9.5 : v stays 8.5 (the hold)
+ *   τ 9.5 → 11 : v runs 8.5 → 10     scene length D = 11
+ */
+function mkMap(dur, holds){
+  const K = [[0, 0]]; let acc = 0;
+  holds.forEach(h => { K.push([h.at + acc, h.at]); acc += h.len; K.push([h.at + acc, h.at]); });
+  K.push([dur + acc, dur]);
+  return {
+    D: dur + acc,
+    v(tau){
+      if (tau <= 0) return 0;
+      for (let i = 1; i < K.length; i++) if (tau <= K[i][0]){
+        const a = K[i-1], b = K[i];
+        return b[0] === a[0] ? b[1] : a[1] + (b[1] - a[1]) * (tau - a[0]) / (b[0] - a[0]);
+      }
+      return dur;
+    },
+    tau(v, after){ let s = v; holds.forEach(h => { if (h.at < v || (after && h.at === v)) s += h.len; }); return s; }
+  };
+}
+
+// Milestones, found through the ease curve (never estimated by hand).
+const G4S = { t0: 2.2, t1: 13.8 };                         // scene 4 glide window (v s)
+const V4M = G4S.t0 + easeInv((150 - 60) / (150 - 38)) * (G4S.t1 - G4S.t0);   // d_o = 60 = 2f
+const V5F = 13 * (0.05 + 0.80 * easeInv((45 - 30) / (45 - 16)));             // d_o = 30 = f
+
+const CFG = [
+  { dur: 10, holds: [{ at: 8.5, len: 1.0 }],  beats: { b1: 0, b2: 4.8, b3: 8.5 } },
+  { dur: 12, holds: [{ at: 9.6, len: 0.8 }],  beats: { b1: 0, b2: 1.0, b3: 3.4, b4: 8.2 } },
+  { dur: 11, holds: [],                       beats: { b1: 0, b2: 4.6, b3: 6.1, b4: 7.3 } },
+  { dur: 14, holds: [{ at: V4M, len: 1.5 }],  beats: { b1: 0, b2: 2.2, b3: 6.7, b4: V4M, b5: V4M }, after: { b5: 1 } },
+  { dur: 13, holds: [{ at: V5F, len: 0.8 }],  beats: { b1: 0, b2: V5F, b3: V5F, b4: 7.8, b5: 10.9 }, after: { b3: 1 } },
+  { dur: 12, holds: [],                       beats: { b1: 0, b2: 3.6, b3: 6.6, b4: 9.8 } },
+];
+CFG.forEach(c => { c.map = mkMap(c.dur, c.holds); });
+// beat time as a fraction of the v1 clock — what the draw fns compare t against
+const bt = (s, b) => CFG[s].beats[b] / CFG[s].dur;
+
+// ── SCENE 1 — a point source sprays rays everywhere ───────────────────────
+/*
+ * WHY this scene exists: image formation makes no sense until you accept
+ * that ONE point emits rays in EVERY direction. A bare screen intercepts
+ * rays from all over the object at every spot — pure overlap, i.e. blur.
+ * (This is the "why is there no picture on my wall" question.)
+ * s1b1: rays grow out · s1b2: screen fades in · s1b3: hold on the blur band.
+ */
+function drawScene1(t){
+  const sx = W * 0.32, sy = H/2;
+  const reveal = ease(clamp01(t / 0.45));
+  const N = 24;
+  const rays = [];
+  for (let i = 0; i < N; i++){
+    const a = i / N * Math.PI * 2;
+    // Each ray stops at the canvas edge (distance to the first wall it hits) —
+    // the old fixed 820 px length stroked ~half a screen of off-canvas line.
+    const c = Math.cos(a), s = Math.sin(a);
+    const L = Math.min(c > 1e-6 ? (W - sx)/c : c < -1e-6 ? -sx/c : 1e9, s > 1e-6 ? (H - sy)/s : s < -1e-6 ? -sy/s : 1e9) + 2;
+    // Reveal by DISTANCE (reveal·820 px, capped at this ray's length) so the
+    // growing front is a circle. A shared fraction made every ray finish at
+    // once and the front traced the canvas rectangle — a "box" (Bardia, 2026-10-07).
+    rays.push([ [[sx, sy], [sx + c*L, sy + s*L]], Math.min(1, reveal * 820 / L) ]);
+  }
+  strokeBundle(rays, 'rgba(34,211,238,0.55)', 1.4, null);          // 24 long rays: the halo sprite carries the glow, an under-stroke cost ~0.8 ms
+  // The glowing source itself: sprite halo + solid core.
+  const r = 4.5 + 1.5*Math.sin(t*22);
+  glow(GLOW.cyan, sx, sy, r*4, 0.85);
+  g.beginPath(); g.arc(sx, sy, r, 0, Math.PI*2); g.fillStyle = '#a5f3fc'; g.fill();
+  label(sx, sy + 20, 'one point of the object', '#7dd3fc');
+  // A bare screen at right catches a smear, not a point.
+  const a2 = clamp01((t - bt(0,'b2')) / 0.2);
+  if (a2 > 0){
+    const xs = W * 0.84;
+    g.save(); g.globalAlpha = a2;
+    g.strokeStyle = '#64748b'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(xs, 24); g.lineTo(xs, H-24); g.stroke();
+    // Where do the rays land? Everywhere between the extreme forward rays.
+    let yMin = H, yMax = 0;
+    for (let i = 0; i < N; i++){
+      const a = i / N * Math.PI * 2, c = Math.cos(a);
+      if (c < 0.15) continue;                       // only forward-going rays reach it
+      const y = sy + Math.tan(a) * (xs - sx);
+      if (y > 20 && y < H-20){ yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); }
+    }
+    if (yMax > yMin){
+      g.fillStyle = 'rgba(251,191,36,0.20)';        // G6: amber = this scene's payoff
+      g.fillRect(xs - 5, yMin, 10, yMax - yMin);
+      label(xs - 12, 30, 'screen: just blur', '#fbbf24', 'right', 'top');
+    }
+    g.restore();
+  }
+}
+
+// ── SCENE 2 — the lens's one job: one point back to one point ─────────────
+/*
+ * Setup: f = +30, point source ON AXIS at d_o = 70 → d_i = +52.5.
+ * Every ray that enters the lens at height y gets u' = u − y/f and — no
+ * matter which y — lands on (52.5, 0). Rays that MISS the lens keep going
+ * straight (dim): losing them costs brightness, never sharpness.
+ * s2b1: straight rays · s2b2: lens in, rays bend · s2b3: fan travels to the
+ * image point · s2b4: image point flashes (hold on it).
+ */
+const S2 = { f: 30, do_: 70 };
+function drawScene2(t){
+  const v = mkView(-85, 72);
+  const { di } = lensCalc(S2.f, S2.do_);
+  const halfH = H * 0.335;
+  const A = halfH / v.S;                            // lens aperture in world units
+  const src = [v.px(-S2.do_), v.py(0)];
+  const lensAlpha = clamp01((t - 0.08) / 0.15);
+  const reveal = ease(clamp01(t / 0.72));
+  drawAxis();
+  drawLensShape(v.px(0), halfH, lensAlpha);
+  drawF(v, S2.f);
+  // Rays through the lens: pick lens-plane heights, bend, converge.
+  const NB = 11, bent = [], straight = [];
+  for (let i = 0; i < NB; i++){
+    const yL = -A*0.92 + (2*A*0.92) * i/(NB-1);
+    const u  = yL / S2.do_;                         // slope from (−d_o,0) to (0,yL)
+    const u2 = bendSlope(u, yL, S2.f);
+    const xEnd = di + 20;
+    bent.push([ [ src, [v.px(0), v.py(yL)], [v.px(xEnd), v.py(yL + u2*xEnd)] ], reveal ]);
+    // Before the lens exists, rays pass straight through undisturbed.
+    if (lensAlpha < 1) straight.push([ [ src, [v.px(72), v.py(yL * (1 + 72/S2.do_))] ], reveal ]);
+  }
+  g.save();
+  if (straight.length){
+    g.globalAlpha = 1 - lensAlpha;
+    strokeBundle(straight, 'rgba(34,211,238,0.65)', 1.5, null);
+  }
+  g.globalAlpha = lensAlpha;
+  strokeBundle(bent, 'rgba(34,211,238,0.65)', 1.5, null);
+  g.restore();
+  // Rays that miss the lens: straight, dim — a smaller lens = dimmer, not worse.
+  g.save();
+  g.strokeStyle = 'rgba(148,163,184,0.18)'; g.lineWidth = 1.2;
+  g.beginPath();
+  [1.6, 2.3, -1.6, -2.3, 2.9, -2.9].forEach(k => {
+    const yL = A * k / 1.4;
+    pathPartial([ src, [v.px(60), v.py(yL * (1 + 60/S2.do_))] ], reveal);
+  });
+  g.stroke();
+  g.restore();
+  // Source dot.
+  glow(GLOW.cyan, src[0], src[1], 18, 0.8);
+  g.beginPath(); g.arc(src[0], src[1], 4.5, 0, Math.PI*2); g.fillStyle = '#a5f3fc'; g.fill();
+  // The payoff (amber): the image point flashes once the rays arrive.
+  if (t > 0.68){
+    const p = clamp01((t - 0.68)/0.12);
+    const rr = 5 + 2.5*Math.sin(t*14);
+    glow(GLOW.amber, v.px(di), v.py(0), rr*3.4, p);
+    g.beginPath(); g.arc(v.px(di), v.py(0), rr, 0, Math.PI*2);
+    g.fillStyle = 'rgba(251,191,36,' + (0.5 + 0.5*p) + ')'; g.fill();
+    label(v.px(di), v.py(0) + 18, 'image point', '#fbbf24');
+  }
+}
+
+// ── SCENE 3 — object at infinity: parallel rays land on F ─────────────────
+/*
+ * The limit d_o → ∞ kills the 1/d_o term: 1/d_i = 1/f, so d_i = f exactly.
+ * That is the magnifying-glass-and-Sun trick — the Sun is far enough that
+ * its rays arrive parallel, so its image is a hot spot one focal length
+ * behind the glass. f is not an abstract knob; you can char paper with it.
+ * s3b1: parallel rays enter · s3b2: bend to F · s3b3: burn spot glows ·
+ * s3b4: the f measure bar.
+ */
+function drawScene3(t){
+  const f = 30;
+  const v = mkView(-90, 62);
+  const halfH = H * 0.335;
+  const A = halfH / v.S;
+  const reveal = ease(clamp01(t / 0.62));
+  drawAxis();
+  drawLensShape(v.px(0), halfH, 1);
+  drawF(v, f);
+  const NB = 7, rays = [];
+  for (let i = 0; i < NB; i++){
+    const y = -A*0.88 + (2*A*0.88) * i/(NB-1);
+    const u2 = bendSlope(0, y, f);                  // parallel in: u = 0
+    const xEnd = f + 22;
+    rays.push([ [ [v.px(-90), v.py(y)], [v.px(0), v.py(y)], [v.px(xEnd), v.py(y + u2*xEnd)] ], reveal ]);
+  }
+  strokeBundle(rays, 'rgba(34,211,238,0.7)', 1.6, 'rgba(34,211,238,0.10)');
+  // Burn spot (amber): pulsing sprite glow exactly at F — s3b3.
+  if (t >= bt(2,'b3')){
+    const p = clamp01((t - bt(2,'b3'))/0.15);
+    const r = 6 + 2.5*Math.sin(t*16);
+    glow(GLOW.amber, v.px(f), v.cy, r*3, 0.9*p);
+    g.beginPath(); g.arc(v.px(f), v.cy, r*0.55, 0, Math.PI*2); g.fillStyle = 'rgba(251,191,36,' + p + ')'; g.fill();
+    label(v.px(f), v.cy + 22, 'burn spot: d_i = f', '#fbbf24');
+  }
+  if (t >= bt(2,'b4')) measure(v.px(0), v.px(f), v.cy + 54, SLATE, 'f');
+  label(v.px(-88), 22, 'rays from a VERY distant object arrive parallel', '#7dd3fc', 'left', 'top');
+}
+
+// ── SCENE 4 — the accounting rule: object in, image out ───────────────────
+/*
+ * f = +30 fixed; d_o glides 150 → 38 over v = 2.2 … 13.8 s. The equation
+ * strip shows the actual bookkeeping: 1/f never moves, so whatever 1/d_o
+ * gains, 1/d_i must give back — on screen, the image WALKING OUT from
+ * just-past-f and growing.
+ *
+ * Milestone (s4b4): at d_o = 60 (= 2f), d_i = 60 and m = −1 — object and
+ * image are mirror twins. V4M is that moment, found through ease(); the
+ * 1.5 s HOLD sits exactly there with "2f" ticks, and the caption lands with
+ * it (B3). After the hold the glide resumes to d_o = 38 (m = −3.75, s4b5).
+ */
+const S4 = { f: 30, h: 14 };
+function s4state(t){
+  const u = ease(clamp01((t * CFG[3].dur - G4S.t0) / (G4S.t1 - G4S.t0)));
+  const do_ = 150 - (150 - 38) * u;
+  const { di, m } = lensCalc(S4.f, do_);
+  return { do_, di, m };
+}
+function drawScene4(t){
+  const { f, h } = S4;
+  const v = mkView(-158, 165);
+  const { do_, di, m } = s4state(t);
+  const halfH = H * 0.30;
+  drawAxis();
+  drawLensShape(v.px(0), halfH, 1);
+  drawF(v, f);
+  // Principal rays (thin) — the exam-drawing skill this scene trains. G6:
+  // light stays cyan; amber is reserved for the image itself.
+  const tip = [v.px(-do_), v.py(h)], mh = m * h, ext = 14;
+  g.save();
+  g.strokeStyle = 'rgba(34,211,238,0.5)'; g.lineWidth = 1.1;
+  g.beginPath();
+  const u1 = bendSlope(0, h, f);                    // 1: parallel → through far F
+  pathPartial([ tip, [v.px(0), v.py(h)], [v.px(di+ext), v.py(h + u1*(di+ext))] ], 1);
+  const uc = -h / do_;                              // 2: through the centre — undeviated
+  pathPartial([ tip, [v.px(di+ext), v.py(h + uc*(do_+di+ext))] ], 1);
+  pathPartial([ tip, [v.px(0), v.py(mh)], [v.px(di+ext), v.py(mh)] ], 1);   // 3: through near F → parallel out
+  g.stroke();
+  g.restore();
+  // Object (cyan, up) and image (amber, inverted since m < 0 here).
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  arrowV(v.px(di), v.py(mh), '#fbbf24', false, 'image');
+  // The two distances as labelled measures — the terms of the equation.
+  measure(v.px(-do_), v.px(0), v.cy + 52, SLATE, 'd_o = ' + do_.toFixed(0));
+  measure(v.px(0), v.px(di), v.cy + 70, SLATE, 'd_i = ' + di.toFixed(1));
+  // 2f ticks — on screen exactly while the object sits at 2f (the hold).
+  if (Math.abs(do_ - 2*f) < 0.6){
+    [-2*f, 2*f].forEach(x => {
+      g.strokeStyle = SLATE; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(v.px(x), v.cy - 6); g.lineTo(v.px(x), v.cy + 6); g.stroke();
+      label(v.px(x), v.cy + 10, '2f', SLATE);
+    });
+  }
+}
+
+// ── SCENE 5 — inside f: the virtual image (magnifying glass) ──────────────
+/*
+ * f = +30; d_o glides 45 → 16, CROSSING f on the way. Outside f: real image
+ * races off to +∞. At d_o = f (s5b2, held 0.8 s): exit rays parallel, image
+ * "at infinity". Inside f: exits DIVERGE (s5b3) — extend them backwards
+ * (dashed, s5b4) and they meet at (d_i, m·h) with d_i < 0: behind the
+ * object, upright, magnified (virtual image + d_i note, s5b5).
+ *
+ * Trap: students see d_i < 0 and think they broke the algebra. The sign IS
+ * the answer — negative means virtual, same side as the object.
+ */
+const S5 = { f: 30, h: 10 };
+function s5state(t){
+  const u = ease(clamp01((t - 0.05) / 0.80));
+  const do_ = 45 - (45 - 16) * u;
+  const { di, m } = lensCalc(S5.f, do_);
+  return { do_, di, m };
+}
+function drawScene5(t){
+  const { f, h } = S5;
+  const v = mkView(-72, 98);
+  const { do_, di, m } = s5state(t);
+  const halfH = H * 0.335;
+  const nearF = Math.abs(do_ - f) < 0.8;            // d_o ≈ f: rays parallel, no image
+  drawAxis();
+  drawLensShape(v.px(0), halfH, 1);
+  drawF(v, f);
+  const tip = [v.px(-do_), v.py(h)];
+  const mh = m * h;
+  // Two principal rays, drawn as real light (solid).
+  const u1 = bendSlope(0, h, f);                    // parallel ray exits sloping down
+  const uc = -h / do_;                              // centre ray: straight through
+  strokeBundle([
+    [ [ tip, [v.px(0), v.py(h)], [v.px(96), v.py(h + u1*96)] ], 1 ],
+    [ [ tip, [v.px(96), v.py(h + uc*(do_ + 96))] ], 1 ]
+  ], 'rgba(34,211,238,0.75)', 1.8, 'rgba(34,211,238,0.12)');
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  if (!nearF && di > 0){
+    // Still outside f: a real image, racing right as d_o shrinks toward f.
+    // B6: it FADES over the last 60 px before the canvas edge instead of popping.
+    const a = clamp01((W - 8 - v.px(di)) / 60);
+    if (a > 0){ g.save(); g.globalAlpha = a; arrowV(v.px(di), v.py(mh), '#fbbf24', false, 'image'); g.restore(); }
+    if (a < 1){ g.save(); g.globalAlpha = 1 - a; label(W - 10, 28, 'image → racing away to infinity →', '#fbbf24', 'right', 'top'); g.restore(); }
+  }
+  if (!nearF && di < 0){
+    // Inside f: back-extend the exits (dashed purple) to the virtual image.
+    // s5b4: the dashes GROW from the lens toward the image (drawPartial idea).
+    const ext = ease(clamp01((t - bt(4,'b4')) / (1.4 / CFG[4].dur)));
+    if (ext > 0){
+      g.save();
+      g.strokeStyle = 'rgba(167,139,250,0.8)'; g.lineWidth = 1.4; g.setLineDash([6,5]);
+      g.beginPath();
+      pathPartial([ [v.px(0), v.py(h)], [v.px(di), v.py(mh)] ], ext);
+      pathPartial([ tip, [v.px(di), v.py(mh)] ], ext);
+      g.stroke();
+      g.restore();
+    }
+    // s5b5: virtual image arrow + the d_i note.
+    const va = clamp01((t - bt(4,'b5')) / (0.6 / CFG[4].dur));
+    if (va > 0){
+      g.save(); g.globalAlpha = va;
+      arrowV(v.px(di), v.py(mh), '#a78bfa', true, 'virtual image');
+      label(v.px(di), v.py(mh) - 28, 'd_i = ' + di.toFixed(1).replace('-', '−') + '  (negative = same side)', '#a78bfa', 'center', 'bottom');
+      g.restore();
+    }
+  }
+  if (nearF) label(v.px(-60), 22, 'd_o = f : exit rays parallel — image at infinity', '#7dd3fc', 'left', 'top');
+}
+
+// ── SCENE 6 — the diverging lens: f < 0, virtual for EVERY object ─────────
+/*
+ * f = −30; d_o glides 70 → 25. The SAME bending rule u' = u − y/f applies,
+ * but f < 0 flips the kick OUTWARD: exits spread, and only their dashed
+ * back-extensions meet. 1/d_i = 1/f − 1/d_o is negative for every d_o, so
+ * the image is always virtual, upright, reduced — parked between the lens
+ * and F on the object side. There is no object position that changes this.
+ *
+ * Worked example: f = −30, d_o = 25:
+ *   1/d_i = −1/30 − 1/25  →  d_i = −13.6;  m = +0.55  (upright, ~half size)
+ * s6b3: dashed extensions grow + virtual image · s6b4: the d_i note lives in
+ * the equation strip (B4), the canvas keeps only "object" + "virtual image".
+ */
+const S6 = { f: -30, h: 12 };
+function s6state(t){
+  const u = ease(clamp01((t - 0.05) / 0.70));
+  const do_ = 70 - (70 - 25) * u;
+  const { di, m } = lensCalc(S6.f, do_);
+  return { do_, di, m };
+}
+// B5: a diverging lens reads as ")(" — thin waist, thick rim, curved clearly.
+// Rim ±14 px, waist ±2 px: quadratic midpoint = ¼·rim + ½·ctrl + ¼·rim
+//   → −7 + ½·10 = −2 on the left face (mirror on the right).
+function drawDivergingLens(xpx, halfH, alpha){
+  if (alpha <= 0) return;
+  g.save(); g.globalAlpha = alpha;
+  g.fillStyle = 'rgba(34,211,238,0.09)'; g.strokeStyle = '#22d3ee'; g.lineWidth = 2;
+  const cy = H/2;
+  g.beginPath();
+  g.moveTo(xpx - 14, cy - halfH);
+  g.quadraticCurveTo(xpx + 10, cy, xpx - 14, cy + halfH);
+  g.lineTo(xpx + 14, cy + halfH);
+  g.quadraticCurveTo(xpx - 10, cy, xpx + 14, cy - halfH);
+  g.closePath(); g.fill(); g.stroke();
+  g.restore();
+}
+function drawScene6(t){
+  const { f, h } = S6;
+  const v = mkView(-88, 62);
+  const { do_, di, m } = s6state(t);
+  const halfH = H * 0.335;
+  drawAxis();
+  drawDivergingLens(v.px(0), halfH, 1);
+  drawF(v, Math.abs(f));
+  const tip = [v.px(-do_), v.py(h)];
+  const mh = m * h;
+  const reveal = ease(clamp01(t / 0.5));
+  // Fan from the object tip; every exit bends AWAY (u' = u − y/f, f < 0).
+  const heights = [h, h*0.5, 0, -h*0.6, -h*1.2];
+  strokeBundle(heights.map(yL => {
+    const u  = (yL - h) / do_;
+    const u2 = bendSlope(u, yL, f);
+    return [ [ tip, [v.px(0), v.py(yL)], [v.px(58), v.py(yL + u2*58)] ], reveal ];
+  }), 'rgba(34,211,238,0.7)', 1.6, 'rgba(34,211,238,0.10)');
+  arrowV(v.px(-do_), v.py(h), '#38bdf8', false, 'object');
+  // s6b3: back-extensions grow toward (d_i, m·h); then the virtual image fades in.
+  const ext = ease(clamp01((t - bt(5,'b3')) / (1.5 / CFG[5].dur)));
+  if (ext > 0){
+    g.save();
+    g.strokeStyle = 'rgba(167,139,250,0.75)'; g.lineWidth = 1.3; g.setLineDash([6,5]);
+    g.beginPath();
+    heights.forEach(yL => pathPartial([ [v.px(0), v.py(yL)], [v.px(di), v.py(mh)] ], ext));
+    g.stroke();
+    g.restore();
+    const va = clamp01((ext - 0.6) / 0.4);
+    if (va > 0){ g.save(); g.globalAlpha = va; arrowV(v.px(di), v.py(mh), '#a78bfa', true, 'virtual image'); g.restore(); }
+  }
+}
+
+// ── The storyboard: titles, captions (anchored to beat labels), eq strips ─
+const SUB_O = 'd<sub>o</sub>', SUB_I = 'd<sub>i</sub>';
+function eqLive(f, do_, di, m, virtualNote){
+  const inv = x => (1/x).toFixed(4).replace('-0.', '−0.').replace('-', '−');
+  const diCls = di < 0 ? 'v' : 'w';
+  let out = '1/f = 1/' + SUB_O + ' + 1/' + SUB_I +
+    ' &nbsp;→&nbsp; 1/' + String(f).replace('-', '−') + ' = <span class="k">1/' + do_.toFixed(0) + '</span>' +
+    ' + <span class="' + diCls + '">1/' + di.toFixed(1).replace('-', '−') + '</span><br>' +
+    '<span class="dim">' + inv(f) + ' = </span><span class="k">' + inv(do_) + '</span>' +
+    '<span class="dim"> + </span><span class="' + diCls + '">' + inv(di) + '</span>' +
+    ' &nbsp;·&nbsp; m = −' + SUB_I + '/' + SUB_O + ' = ' + m.toFixed(2).replace('-', '−');
+  if (virtualNote) out += ' &nbsp;<span class="v">' + virtualNote + '</span>';
+  return out;
+}
+
+// Each caption names the BEAT that shows it (G7): its time comes from the
+// timeline label s<scene><beat>, never from the eased t.
+const SCENES = [
+  { title: '1 · A point of light', draw: drawScene1,
+    caps: [
+      { b: 'b1', html: 'Every point of a glowing object throws off light rays in <span class="k">all directions</span>. Follow just one point.' },
+      { b: 'b2', html: 'Put up a bare screen and every spot on it gets hit by rays from everywhere — a <span class="w">blur</span>, never a picture. Something has to SORT the rays.' },
+    ],
+    eq: () => '' },
+
+  { title: '2 · The lens has one job', draw: drawScene2,
+    caps: [
+      { b: 'b1', html: 'Same spraying point — now with a lens in the way.' },
+      { b: 'b3', html: "A lens's <span class=\"k\">one job</span>: bend every ray from one point so they all meet again at <span class=\"k\">one point</span>." },
+      { b: 'b4', html: 'That meeting point is the <span class="w">image point</span>. Rays that miss the lens just travel on — a bigger lens only makes the image <em>brighter</em>, never sharper.' },
+    ],
+    eq: t => t >= bt(1,'b3') ? '<span class="dim">every ray, any height y, same landing spot — that is what 1/f = 1/' + SUB_O + ' + 1/' + SUB_I + ' encodes</span>' : '' },
+
+  { title: '3 · Object at infinity — the burn spot', draw: drawScene3,
+    caps: [
+      { b: 'b1', html: 'Send the object VERY far away. By the time its rays get here they are practically <span class="k">parallel</span>.' },
+      { b: 'b2', html: 'Parallel rays all reconverge at one special distance behind the lens: the <span class="w">focal length f</span>.' },
+      { b: 'b4', html: 'The Sun counts as "at infinity" — a magnifying glass drops its image exactly at <span class="w">f</span>. That concentrated spot is the classic paper-burning trick.' },
+    ],
+    eq: t => t >= bt(2,'b2') ? SUB_O + ' → ∞ &nbsp;⇒&nbsp; 1/' + SUB_O + ' → 0 &nbsp;⇒&nbsp; 1/' + SUB_I + ' = 1/f &nbsp;⇒&nbsp; <span class="w">' + SUB_I + ' = f</span>' : '' },
+
+  { title: '4 · The accounting rule', draw: drawScene4,
+    caps: [
+      { b: 'b1', html: 'Now slide the object in from far away — and keep the books balanced.' },
+      { b: 'b2', html: 'The accounting rule: <span class="w">1/f</span> = <span class="k">1/' + SUB_O + '</span> + <span class="w">1/' + SUB_I + '</span>. (The formula card writes s and s′ for the same two distances.)' },
+      { b: 'b3', html: 'f is FIXED. As ' + SUB_O + ' shrinks, <span class="k">1/' + SUB_O + '</span> grows — so <span class="w">1/' + SUB_I + '</span> must shrink: the image <span class="w">walks out</span> and grows. Watch the two terms trade below.' },
+      { b: 'b4', html: 'Halfway milestone worth memorizing: at ' + SUB_O + ' = 2f the trade is even — ' + SUB_I + ' = 2f and m = −1, a same-size inverted twin.' },
+      { b: 'b5', html: 'Keep pushing: past 2f the <span class="w">image outgrows the object</span>.' },
+    ],
+    eq: t => { const s = s4state(t); return eqLive(S4.f, s.do_, s.di, s.m); } },
+
+  { title: '5 · Inside f — the virtual image', draw: drawScene5,
+    caps: [
+      { b: 'b1', html: 'One more push: bring the object <span class="k">inside f</span>. First the real image races away to infinity…' },
+      { b: 'b3', html: '…then past f the exit rays <span class="v">diverge</span>. They never meet on the far side. No real image exists.' },
+      { b: 'b4', html: 'But trace the exits <span class="v">backwards</span> (dashed): they all appear to come from one point behind the object — a <span class="v">virtual image</span>, upright and magnified.' },
+      { b: 'b5', html: SUB_I + ' comes out <span class="v">negative</span>. Not an error — negative IS the sign convention for "virtual, same side". You are holding a magnifying glass.' },
+    ],
+    eq: t => { const s = s5state(t);
+      if (Math.abs(s.do_ - S5.f) < 0.8) return SUB_O + ' = f &nbsp;⇒&nbsp; 1/' + SUB_I + ' = 0 &nbsp;⇒&nbsp; image at infinity';
+      return eqLive(S5.f, s.do_, s.di, s.m, s.di < 0 ? SUB_I + ' &lt; 0 → virtual, upright' : ''); } },
+
+  { title: '6 · The diverging lens', draw: drawScene6,
+    caps: [
+      { b: 'b1', html: 'Flip the lens: a <span class="v">diverging</span> (concave) lens. Same equation — but now <span class="v">f &lt; 0</span>.' },
+      { b: 'b2', html: 'The same bending rule now kicks every ray <span class="v">outward</span>. The exits spread — they never meet.' },
+      { b: 'b3', html: 'Their dashed back-extensions DO meet, on the object side: a <span class="v">virtual image</span> — upright, reduced, trapped between the lens and F.' },
+      { b: 'b4', html: 'With f &lt; 0, 1/' + SUB_I + ' = 1/f − 1/' + SUB_O + ' is negative for EVERY object position — a diverging lens alone can never throw a real image.' },
+    ],
+    // B4: the d_i note lives here, not on the canvas.
+    eq: t => { const s = s6state(t);
+      return eqLive(S6.f, s.do_, s.di, s.m, SUB_I + ' = ' + s.di.toFixed(1).replace('-', '−') + ' &lt; 0 for every ' + SUB_O + ' — between lens and F, always'); } },
+];
+// G4: every scene starts a frame with an empty label-box list. Wrapping draw
+// here (not inside render) keeps draw-cost-probe.js, which calls draw() directly, honest.
+SCENES.forEach(s => { const d = s.draw; s.draw = t => { placed = []; d(t); }; });
+
+// ── The master timeline (G2) — ONE clock owns everything ──────────────────
+/*
+ * Layout on the timeline (τ seconds):
+ *   scene i  : START[i] … END[i]      (= START + hold-padded duration)
+ *   gap      : END[i] … START[i+1]    (GAP = 0.4 s) — G5 crossfade: the first
+ *              half shows scene i frozen at its last frame fading out, the
+ *              second half scene i+1 at its first frame fading in. Beat
+ *              labels sit at START (fully faded in), so a seek never lands
+ *              on a half-dark frame.
+ * Labels: s<scene>b<beat> for every storyboard beat, plus 'end'.
+ */
+const GAP = 0.4;
+const START = [], END = [], BEAT_T = {};
+let TOTAL = 0;
+CFG.forEach((c, i) => {
+  START[i] = TOTAL; END[i] = TOTAL + c.map.D;
+  Object.keys(c.beats).forEach(b => { BEAT_T['s' + (i+1) + b] = START[i] + c.map.tau(c.beats[b], c.after && c.after[b]); });
+  TOTAL = END[i] + (i < CFG.length - 1 ? GAP : 0);
+});
+const tl = gsap.timeline({ paused: false });
+tl.to({}, { duration: TOTAL, ease: 'none' }, 0);          // gives the timeline its length
+Object.keys(BEAT_T).forEach(k => tl.addLabel(k, BEAT_T[k]));
+tl.addLabel('end', TOTAL);
+SCENES.forEach((s, i) => s.caps.forEach(c => { c.T = BEAT_T['s' + (i+1) + c.b]; }));
+
+// ── Player: render() reads the timeline and draws (plumbing) ──────────────
+let curScene = 0, capKey = '', lastEq = null, lastOp = -1;
+const capEl = document.getElementById('caption');
+const eqEl = document.getElementById('eq');
+const titleEl = document.getElementById('sceneTitle');
+const scrubEl = document.getElementById('scrub');
+const btnPlay = document.getElementById('btnPlay');
+const dotsEl = document.getElementById('dots');
+let scrubbing = false;
+
+SCENES.forEach((s, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot'; d.title = s.title;
+  d.onclick = () => go(i);
+  dotsEl.appendChild(d);
+});
+
+function render(){
+  const T = tl.time();
+  let i = 0; while (i < CFG.length - 1 && T >= START[i+1]) i++;
+  let sc, tau, t, op = 1;
+  if (i < CFG.length - 1 && T >= END[i]){                 // in the crossfade gap after scene i
+    const mid = END[i] + GAP/2;
+    if (T < mid){ sc = i;   tau = CFG[i].map.D; t = 1; op = (mid - T) / (GAP/2); }
+    else        { sc = i+1; tau = 0;            t = 0; op = (T - mid) / (GAP/2); }
+  } else {
+    sc = i; tau = T - START[i]; t = CFG[i].map.v(tau) / CFG[i].dur;
+  }
+  op = clamp01(op);
+  curScene = sc;
+  g.clearRect(0, 0, W, H);
+  SCENES[sc].draw(t);
+  // UI
+  const S = SCENES[sc];
+  titleEl.textContent = S.title;
+  if (!scrubbing) scrubEl.value = Math.round(T / TOTAL * 1000);
+  [...dotsEl.children].forEach((d, k) => d.classList.toggle('on', k === sc));
+  const Tabs = START[sc] + tau;
+  let idx = -1;
+  for (let k = 0; k < S.caps.length; k++) if (Tabs >= S.caps[k].T - 1e-9) idx = k;
+  const key = sc + ':' + idx;
+  if (key !== capKey){
+    capKey = key;
+    capEl.innerHTML = idx >= 0 ? S.caps[idx].html : '';
+    if (op === 1 && !tl.paused()){ capEl.classList.remove('fadein'); void capEl.offsetWidth; capEl.classList.add('fadein'); }
+  }
+  const eqHtml = S.eq ? S.eq(t) : '';
+  if (eqHtml !== lastEq){ lastEq = eqHtml; eqEl.innerHTML = eqHtml; }
+  const opKey = Math.round(op * 100);
+  if (opKey !== lastOp){ lastOp = opKey; cvs.style.opacity = op; capEl.style.opacity = op; }
+  btnPlay.textContent = tl.progress() >= 1 ? '↻ Replay' : tl.paused() ? '▶ Play' : '⏸ Pause';
+}
+gsap.ticker.add(render);                                  // every frame; seeks also call render() directly
+
+// Controls — all of them just move the one timeline.
+function seekTo(label, play){ tl.seek(label, false); if (play) tl.play(); render(); }
+function go(n){ n = Math.max(0, Math.min(CFG.length - 1, n)); seekTo('s' + (n+1) + 'b1', true); }
+function togglePlay(){
+  if (tl.progress() >= 1){ tl.restart(); return; }       // at the very end, Play = run the story again
+  tl.paused(!tl.paused()); render();
+}
+scrubEl.addEventListener('input', () => {
+  scrubbing = true; tl.pause();                          // scrubbing = you are the clock now
+  tl.progress(scrubEl.value / 1000, false); render();
+});
+scrubEl.addEventListener('change', () => { scrubbing = false; });
+document.getElementById('btnPrev').onclick = () => go(curScene - 1);
+document.getElementById('btnNext').onclick = () => go(curScene + 1);
+btnPlay.onclick = togglePlay;
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowRight') go(curScene + 1);
+  else if (e.key === 'ArrowLeft') go(curScene - 1);
+});
+// B1: tab hidden → pause where we are; visible → carry on from there (no skipped scene).
+let wasPlaying = false;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ wasPlaying = !tl.paused() && tl.progress() < 1; tl.pause(); }
+  else if (wasPlaying){ tl.play(); }
+});
+
+// G3: canvas width follows the element (ResizeObserver); height stays the constant H.
+initCanvas();
+new ResizeObserver(() => { if ((cvs.clientWidth || 600) !== W){ initCanvas(); render(); } }).observe(cvs);
+window.addEventListener('resize', () => { initCanvas(); render(); });   // devicePixelRatio changes (zoom)
+render();
+</script>
+</body>
+</html>
