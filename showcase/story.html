@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it got here · How This Was Made</title>
+<meta name="description" content="How an AI content pipeline was built and checked: the work, the stages, the decisions, the tools, and what comes next.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="prev" href="pipeline.html">
+<link rel="next" href="tools.html">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="top-row">
+      <a class="brand" href="index.html">How this was made</a>
+      <span class="count">04 / 07<span class="label"> · How it got here</span></span>
+    </div>
+    <ol class="progress" aria-label="Pages">
+      <li class="done"><a href="index.html" aria-label="1. Who and what"></a></li>
+      <li class="done"><a href="work.html" aria-label="2. The work"></a></li>
+      <li class="done"><a href="pipeline.html" aria-label="3. The pipeline"></a></li>
+      <li class=""><a href="story.html" aria-label="4. How it got here" aria-current="page"></a></li>
+      <li class=""><a href="tools.html" aria-label="5. The toolset"></a></li>
+      <li class=""><a href="next.html" aria-label="6. What's next"></a></li>
+      <li class=""><a href="contact.html" aria-label="7. Contact"></a></li>
+    </ol>
+  </div>
+</header>
+<main id="main">
+<p class="eyebrow">04 · How it got here</p>
+<h1>Two lines: the physics sims, then the content pipeline</h1>
+<p class="lede">Each stop is a dated step. Filled stops are where the plan changed. Commit links go to the public repo, so those steps can be checked.</p>
+
+<h2 class="line-name"><span class="line-chip sims" aria-hidden="true"></span>Line 1 · The physics sims, May to September 2026</h2>
+<ol class="metro sims">
+  <li>
+    <time>By 9 May</time>
+    <h3>Sims that teach from the code up</h3>
+    <p>All 76 original sims got a plain-language comment pass, so the code explains the physics. The same day, a new batch aimed at known exam traps was added.</p>
+  </li>
+  <li>
+    <time datetime="2026-05-12">12 May</time>
+    <h3>Checked against the textbook</h3>
+    <p>44 sims cross-checked against the course textbook: zero formula errors.</p>
+  </li>
+  <li>
+    <time datetime="2026-05-23">23 May</time>
+    <h3>A full correctness audit</h3>
+    <p>All 73 sims of the time audited; no new bugs found.</p>
+  </li>
+  <li>
+    <time datetime="2026-05-30">30–31 May</time>
+    <h3>Audit by exam topic</h3>
+    <p>The 33 sims for the later tests were re-audited topic by topic: 29 bugs fixed, and an automated checker caught 2 more.</p>
+  </li>
+  <li>
+    <time datetime="2026-06-01">1–5 Jun</time>
+    <h3>Checked against the course</h3>
+    <p>14 sims re-checked against what the first test covers: 17 fixes.</p>
+  </li>
+  <li>
+    <time datetime="2026-06-13">13 Jun</time>
+    <h3>One look</h3>
+    <p>Every sim and study page moved to one shared dark palette.</p>
+  </li>
+  <li>
+    <time datetime="2026-07-09">9–13 Jul</time>
+    <h3>Live checks before each test</h3>
+    <p>A parallel audit, then a pass in the browser on the running sims: 12 more fixes.</p>
+  </li>
+  <li class="turn">
+    <time datetime="2026-07-18">18 Jul</time>
+    <h3>The first animated explainers</h3>
+    <p>Three story-style explainers (lenses, mirrors, relativity) that play scene by scene with captions.</p>
+  </li>
+  <li class="interchange">
+    <time datetime="2026-09-04">4 Sep</time>
+    <h3>97 pages, one hub</h3>
+    <p>94 sims and 3 explainers; 89 are linked from the hub page. 111 fixes are logged so none of them comes back.</p>
+    <p class="fix"><b>Change here:</b> the three explainers start line 2.</p>
+  </li>
+</ol>
+
+<h2 class="line-name"><span class="line-chip pipe" aria-hidden="true"></span>Line 2 · The content pipeline, 5 to 7 October 2026</h2>
+<ol class="metro pipe">
+  <li class="turn">
+    <time datetime="2026-10-05">5 Oct</time>
+    <h3>The brief, and an honest inventory</h3>
+    <p>The ask: engaging content made with AI tools, on a weekly goal. The explainers and course pages existed, but none were online; only a separate demo sim was public.</p>
+    <p class="fix"><b>Decision:</b> put a real sample online before replying, instead of describing it.</p>
+  </li>
+  <li>
+    <time datetime="2026-10-06T23:21">6 Oct · 23:21</time>
+    <h3>Three explainers go live</h3>
+    <p class="fix"><b>Fixed:</b> the work became linkable. <a class="src" href="https://github.com/mundaneb3at/sim-maker-kit/commit/c77d11f">commit c77d11f</a></p>
+  </li>
+  <li class="turn">
+    <time datetime="2026-10-06">6 Oct · late</time>
+    <h3>Measure before rebuilding</h3>
+    <p>The lens explainer's first scene took 29.7 ms per frame against a 16.7 ms budget, so it stuttered. The cause was a glow effect redrawn on every frame, not the drawing engine.</p>
+    <p class="fix"><b>Decision:</b> keep the engine, fix the glow, and rebuild the story through a one-folder pipeline with a check per stage. The folder shape is borrowed from Jake Van Clief's one-folder animation workflow, without its voice and render stages for now.</p>
+  </li>
+  <li>
+    <time datetime="2026-10-07T01:06">7 Oct · 01:06</time>
+    <h3>Lens Story v2 ships after three review rounds</h3>
+    <p>One round caught the first scene reading as an expanding box instead of light: every ray grew by the same fraction, so they all finished together. The shared rule now says rays grow by distance. A second model reviewed the result and passed it; the heaviest scene is now 1.6 ms.</p>
+    <p class="fix"><b>Fixed:</b> the stutter, and a rule every later story inherits. <a class="src" href="https://github.com/mundaneb3at/sim-maker-kit/commit/8e4165f">commit 8e4165f</a></p>
+  </li>
+  <li>
+    <time datetime="2026-10-07T20:00">7 Oct · 20:00</time>
+    <h3>The process gets a diagram</h3>
+    <p class="fix"><b>Fixed:</b> the method was visible only as its product. <a class="src" href="https://github.com/mundaneb3at/sim-maker-kit/commit/c76af63">commit c76af63</a></p>
+  </li>
+  <li>
+    <time datetime="2026-10-07T21:11">7 Oct · 21:11</time>
+    <h3>The same checks, aimed at image and video</h3>
+    <p class="fix"><b>Fixed:</b> answers "can this do image and video?" with a plan that is labelled proposed, not claimed. <a class="src" href="https://github.com/mundaneb3at/sim-maker-kit/commit/5805861">commit 5805861</a></p>
+  </li>
+  <li class="turn">
+    <time datetime="2026-10-07">7 Oct · evening</time>
+    <h3>The first video was dropped</h3>
+    <p>It was a 30-second screen recording of the lens explainer. A recording of a web page is not made for the frame, and it read as low quality.</p>
+    <p class="fix"><b>Decision:</b> make a video composed for a vertical screen, voice first, with captions timed to the spoken words. The plan is on page 6.</p>
+  </li>
+  <li class="now">
+    <time datetime="2026-10-07">7 Oct · night</time>
+    <h3>This site <span class="here">You are here</span></h3>
+    <p>The diagrams were rewritten as plain text in larger type with calmer colours, so they read on a phone.</p>
+    <p class="fix"><b>Decision:</b> let the workflow itself be the sample, with every step traceable.</p>
+  </li>
+</ol>
+</main>
+<nav class="pager" aria-label="Page navigation">
+  <a class="prev" href="pipeline.html"><span aria-hidden="true">&larr;</span> The pipeline</a>
+  <a class="next" href="tools.html">The toolset <span aria-hidden="true">&rarr;</span></a>
+</nav>
+<p class="keys">&larr; &rarr; keys also work</p>
+</body>
+</html>

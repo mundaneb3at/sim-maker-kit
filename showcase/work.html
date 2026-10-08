@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The work · How This Was Made</title>
+<meta name="description" content="How an AI content pipeline was built and checked: the work, the stages, the decisions, the tools, and what comes next.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="prev" href="index.html">
+<link rel="next" href="pipeline.html">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="top-row">
+      <a class="brand" href="index.html">How this was made</a>
+      <span class="count">02 / 07<span class="label"> · The work</span></span>
+    </div>
+    <ol class="progress" aria-label="Pages">
+      <li class="done"><a href="index.html" aria-label="1. Who and what"></a></li>
+      <li class=""><a href="work.html" aria-label="2. The work" aria-current="page"></a></li>
+      <li class=""><a href="pipeline.html" aria-label="3. The pipeline"></a></li>
+      <li class=""><a href="story.html" aria-label="4. How it got here"></a></li>
+      <li class=""><a href="tools.html" aria-label="5. The toolset"></a></li>
+      <li class=""><a href="next.html" aria-label="6. What's next"></a></li>
+      <li class=""><a href="contact.html" aria-label="7. Contact"></a></li>
+    </ol>
+  </div>
+</header>
+<main id="main">
+<p class="eyebrow">02 · The work</p>
+<h1>Animated explainers and interactive sims, made with AI and checked by eye</h1>
+<p class="lede">For one physics course, AI agents built 97 single-file web pages under my direction: 94 interactive simulations and 3 animated explainers that play scene by scene with captions. The explainers and one simulation are public.</p>
+
+<div class="stats">
+  <div class="stat"><b>97</b><span>single-file pages for one course</span></div>
+  <div class="stat"><b>78 s</b><span>Lens Story v2, 6 scenes, 25 timed beats</span></div>
+  <div class="stat"><b>29.7 → 1.6 ms</b><span>heaviest scene's draw time per frame, v1 → v2 (budget 16.7 ms)</span></div>
+</div>
+
+<div class="grid two">
+  <figure class="card">
+    <a class="shot-link" href="../lens_story_v2.html"><img src="img/lens.png" width="1200" height="760" alt="Lens Story v2: a point of light spraying rays toward a screen that shows only blur." loading="lazy"></a>
+    <figcaption><b>Lens Story v2</b>: how a thin lens forms an image. Rebuilt through the pipeline on the next page. <a href="../lens_story_v2.html">Watch it</a></figcaption>
+  </figure>
+  <figure class="card">
+    <a class="shot-link" href="../mirror_story.html"><img src="img/mirror.png" width="1200" height="760" alt="Mirror Story: parallel rays reflect off a concave mirror and meet at the focal point F, labelled f = R/2." loading="lazy"></a>
+    <figcaption><b>Mirror Story</b>: how curved mirrors form images. <a href="../mirror_story.html">Watch it</a></figcaption>
+  </figure>
+  <figure class="card">
+    <a class="shot-link" href="../relativity_story.html"><img src="img/relativity.png" width="1200" height="760" alt="Relativity Story: a lamp on a platform, a train moving at half light speed, and the caption that both measure light at full speed c." loading="lazy"></a>
+    <figcaption><b>Relativity Story</b>: where the γ factor comes from. <a href="../relativity_story.html">Watch it</a></figcaption>
+  </figure>
+  <div class="card">
+    <p class="tag">Interactive</p>
+    <h3>Projectile motion, reference sim</h3>
+    <p>Learn it, drag the sliders, then quiz yourself. It is also the template the AI copies to make a new sim on any topic, with the build guide beside it.</p>
+    <p><a href="../reference-sim.html">Open the sim</a> · <a href="../">The kit and its guide</a></p>
+  </div>
+</div>
+<p class="small muted">Draw times are the median per frame on the same probe for both versions, measured in Chrome during the review stage.</p>
+</main>
+<nav class="pager" aria-label="Page navigation">
+  <a class="prev" href="index.html"><span aria-hidden="true">&larr;</span> Who and what</a>
+  <a class="next" href="pipeline.html">The pipeline <span aria-hidden="true">&rarr;</span></a>
+</nav>
+<p class="keys">&larr; &rarr; keys also work</p>
+</body>
+</html>

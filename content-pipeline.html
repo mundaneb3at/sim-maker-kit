@@ -4,194 +4,119 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Content Pipeline</title>
+  <meta name="description" content="Proposed: the story pipeline pointed at image and video, with a research step in front and the same checks between stages.">
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
+    /* Readable rebuild 2026-10-07: real HTML text (not a scaled SVG), so nothing shrinks on a phone.
+       Floor: body 17px, labels >= 14px, every text colour >= 4.5:1, muted low-saturation palette.
+       Wide screens: one row, left to right. Narrow screens: one column, top to bottom.
+       Same layout rules as pipeline.html; keep the two in step. */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --color-paper:   #f5f5f5;   /* white-smoke */
-      --color-ink:     #2d3142;   /* jet-black */
-      --color-muted:   #4f5d75;   /* blue-slate */
-      --color-accent:  #eb6c36;   /* atomic-tangerine */
-      --font-sans:     'Geist', system-ui, sans-serif;
-      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
-      --font-mono:     'Geist Mono', ui-monospace, monospace;
+      --paper: #f6f4ef;  --panel: #edeae3;  --ink: #2b2f3a;  --muted: #4a5162;  --line: #d3cfc6;
+      --accent: #b4806a;  --accent-soft: rgba(180, 128, 106, 0.12);  --accent-text: #8a5640;
+      --sans: 'Geist', system-ui, sans-serif;
+      --serif: 'Instrument Serif', 'Noto Serif', Georgia, serif;
+      --mono: 'Geist Mono', ui-monospace, monospace;
     }
-    body {
-      font-family: var(--font-sans);
-      background: var(--color-paper);
-      color: var(--color-ink);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 3rem 2rem;
-    }
-    .frame { max-width: 1200px; width: 100%; }
-    .diagram-container { width: 100%; overflow-x: auto; }
-    .eyebrow {
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
-      font-weight: 500;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--color-muted);
-      margin-bottom: 0.5rem;
-    }
-    h1 {
-      font-family: var(--font-serif);
-      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
-      font-weight: 400;
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-      color: var(--color-ink);
-      margin-bottom: 1.5rem;
-    }
-    svg { width: 100%; min-width: 1104px; display: block; }
-    @media print {
-      .diagram-container { overflow-x: visible; }
-      svg { min-width: 0; }
+    /* Opt in to cross-document view transitions so arriving from the showcase site crossfades cleanly. */
+    @view-transition { navigation: auto; }
+    body { font: 17px/1.5 var(--sans); background: var(--paper); color: var(--ink); padding: 40px 16px; }
+    .frame { max-width: 1200px; margin: 0 auto; }
+    .eyebrow { font-family: var(--mono); font-size: 0.875rem; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(1.8rem, 2.6vw + 1rem, 2.6rem); line-height: 1.12; letter-spacing: -0.01em; margin-bottom: 1rem; max-width: 30ch; }
+    .note { font-size: 1.05rem; color: var(--muted); max-width: 60ch; margin-bottom: 1.75rem; }
+    .note b { color: var(--ink); font-weight: 600; }
+
+    .flow { display: flex; flex-direction: column; gap: 8px; }
+    .band { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .band > h2 { font-family: var(--mono); font-size: 0.875rem; font-weight: 500; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+    .row { display: flex; flex-direction: column; gap: 8px; }
+    .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; flex: 1; min-width: 0; }
+    .stage.focal { border: 1.5px solid var(--accent); background: var(--accent-soft); }
+    .stage.planned { background: transparent; border-style: dashed; }
+    .num { font-family: var(--mono); font-size: 0.875rem; color: var(--muted); }
+    .focal .num { color: var(--accent-text); }
+    .stage h3 { font-size: 1.15rem; font-weight: 600; margin: 2px 0 4px; }
+    .file { font-family: var(--mono); font-size: 0.875rem; color: var(--muted); overflow-wrap: anywhere; }
+    .stage p { font-size: 1rem; margin-top: 6px; }
+    /* The handoff between two stages: what passes the work on. */
+    .hand { display: flex; align-items: center; gap: 8px; font-size: 0.9375rem; color: var(--muted); padding: 2px 0 2px 14px; }
+    .hand::before { content: "\2193"; font-size: 1.2rem; color: var(--muted); }
+    .hand.ship { color: var(--accent-text); font-weight: 600; }
+    .hand.ship::before { color: var(--accent-text); }
+    .research { margin-bottom: 8px; }
+
+    .backend { margin-top: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+    .backend h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; }
+    .backend p { font-size: 1rem; }
+    .backend .file { margin-top: 6px; }
+    .key { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 0.9375rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 24px; }
+    .swatch { display: inline-block; width: 16px; height: 12px; border: 1.5px solid var(--accent); background: var(--accent-soft); border-radius: 2px; vertical-align: -1px; margin-right: 6px; }
+    .swatch.dash { border: 1.5px dashed var(--muted); background: transparent; }
+
+    @media (min-width: 900px) {
+      .flow, .row { flex-direction: row; align-items: stretch; }
+      .band { flex: var(--n, 1); }
+      .hand { flex-direction: column; justify-content: center; text-align: center; width: 92px; flex: none; padding: 28px 0 0; gap: 2px; font-size: 0.875rem; }
+      .row .hand { padding-top: 0; }
+      .hand::before { content: "\2192"; }
+      .research { max-width: calc((100% - 3 * 92px - 24px) * 2 / 5 + 92px); }
+      .hand.drop { flex-direction: row; justify-content: flex-start; width: auto; padding: 0 0 0 14px; }
+      .hand.drop::before { content: "\2193"; }
     }
   </style>
 </head>
 <body>
-  <div class="frame">
-    <p class="eyebrow">Proposed · the story pipeline applied to image and video</p>
+  <main class="frame">
+    <p class="eyebrow">Proposed · the story pipeline, pointed at image and video</p>
     <h1>Content pipeline: research first, then the same message-first checks</h1>
+    <p class="note">The same pipeline that built the lens story. <b>Research and the generate stage are proposed and have not run yet.</b> The checks between stages are the part already proven.</p>
 
-    <div class="diagram-container">
-      <svg viewBox="0 0 1104 504" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="content-pipeline-title content-pipeline-desc">
-        <title id="content-pipeline-title">Content pipeline</title>
-        <desc id="content-pipeline-desc">A research step scans trends and picks one idea into a brief; the brief's message then runs through the same five checked stages as the story pipeline (message, shot list, generate, review, publish), with brand rules and a prompt library read by every stage and improved by each review.</desc>
-        <defs>
-          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
-          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
-        </defs>
+    <section class="band research" style="--n:2">
+      <h2>0 · Research</h2>
+      <div class="row">
+        <div class="stage planned"><span class="num">R1</span><h3>Scan</h3><span class="file">sources.md</span><p>What is trending, what performed.</p></div>
+        <div class="hand">Picks one idea</div>
+        <div class="stage planned"><span class="num">R2</span><h3>Brief</h3><span class="file">brief.md</span><p>Who it is for, one message.</p></div>
+      </div>
+    </section>
+    <div class="hand drop">The one message goes to stage 01</div>
 
-        <rect width="100%" height="100%" fill="#f5f5f5"/>
-
-        <!-- Band labels: research on top, then the story pipeline's three bands. -->
-        <g font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75" letter-spacing="0.14em">
-          <line x1="20"  y1="52"  x2="388"  y2="52"  stroke="#bfc0c0" stroke-width="0.8"/>
-          <rect x="148" y="46" width="112" height="12" fill="#f5f5f5"/><text x="204" y="55" text-anchor="middle">1 · RESEARCH</text>
-          <line x1="20"  y1="212" x2="388"  y2="212" stroke="#bfc0c0" stroke-width="0.8"/>
-          <line x1="484" y1="212" x2="852"  y2="212" stroke="#bfc0c0" stroke-width="0.8"/>
-          <line x1="948" y1="212" x2="1084" y2="212" stroke="#bfc0c0" stroke-width="0.8"/>
-          <rect x="140" y="206" width="128" height="12" fill="#f5f5f5"/><text x="204" y="215" text-anchor="middle">2 · THE MESSAGE</text>
-          <rect x="590" y="206" width="156" height="12" fill="#f5f5f5"/><text x="668" y="215" text-anchor="middle">3 · THE LOOK, CHECKED</text>
-          <rect x="968" y="206" width="96" height="12" fill="#f5f5f5"/><text x="1016" y="215" text-anchor="middle">4 · SHIPPED</text>
-        </g>
-
-        <!-- Arrows first. Research handoff, the brief dropping into stage 01, then the stage handoffs. -->
-        <g stroke="#4f5d75" stroke-width="1.2" fill="none" marker-end="url(#arrow)">
-          <line x1="156" y1="116" x2="252" y2="116"/>
-          <path d="M 320 160 V 176 A 8 8 0 0 1 312 184 H 96 A 8 8 0 0 0 88 192 V 232"/>
-          <line x1="156" y1="276" x2="252" y2="276"/>
-          <line x1="388" y1="276" x2="484" y2="276"/>
-          <line x1="620" y1="276" x2="716" y2="276"/>
-        </g>
-        <line x1="852" y1="276" x2="948" y2="276" stroke="#eb6c36" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
-        <!-- Write-back loop: each review improves the brand rules and prompt library. -->
-        <line x1="784" y1="320" x2="784" y2="376" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-
-        <!-- Arrow labels: opaque mask, 6px clear of the stroke. -->
-        <g font-family="'Geist Mono', monospace" font-size="8" text-anchor="middle" letter-spacing="0.06em">
-          <rect x="162" y="92"  width="84" height="12" fill="#f5f5f5"/><text x="204" y="101" fill="#4f5d75">PICKS ONE IDEA</text>
-          <rect x="162" y="164" width="84" height="12" fill="#f5f5f5"/><text x="204" y="173" fill="#4f5d75">ONE MESSAGE</text>
-          <rect x="162" y="252" width="84" height="12" fill="#f5f5f5"/><text x="204" y="261" fill="#4f5d75">ONE PER FRAME</text>
-          <rect x="394" y="252" width="84" height="12" fill="#f5f5f5"/><text x="436" y="261" fill="#4f5d75">PROMPTS + REFS</text>
-          <rect x="626" y="252" width="84" height="12" fill="#f5f5f5"/><text x="668" y="261" fill="#4f5d75">PICK + VERIFY</text>
-          <rect x="858" y="252" width="84" height="12" fill="#f5f5f5"/><text x="900" y="261" fill="#eb6c36">WATCH + "OK"</text>
-          <rect x="792" y="342" width="80" height="12" fill="#f5f5f5"/><text x="832" y="351" fill="#4f5d75">WRITES BACK</text>
-        </g>
-
-        <!-- Research: scan -->
-        <rect x="20" y="72" width="136" height="88" rx="6" fill="#f5f5f5"/>
-        <rect x="20" y="72" width="136" height="88" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <rect x="28" y="80" width="20" height="12" rx="2" fill="transparent" stroke="#4f5d75" stroke-opacity="0.4" stroke-width="0.8"/>
-        <text x="38" y="89" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">R1</text>
-        <text x="88" y="112" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Scan</text>
-        <text x="88" y="130" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sources.md</text>
-        <text x="88" y="144" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">trends · what performed</text>
-
-        <!-- Research: brief -->
-        <rect x="252" y="72" width="136" height="88" rx="6" fill="#f5f5f5"/>
-        <rect x="252" y="72" width="136" height="88" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <rect x="260" y="80" width="20" height="12" rx="2" fill="transparent" stroke="#4f5d75" stroke-opacity="0.4" stroke-width="0.8"/>
-        <text x="270" y="89" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">R2</text>
-        <text x="320" y="112" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Brief</text>
-        <text x="320" y="130" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">brief.md</text>
-        <text x="320" y="144" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">audience · one message</text>
-
-        <!-- Honesty callout in the empty top-right: what is proposed vs proven. -->
-        <g font-family="'Instrument Serif', serif" font-style="italic" font-size="15" fill="#4f5d75">
-          <text x="484" y="104">The same pipeline that built the lens story, pointed at image and video.</text>
-          <text x="484" y="126">Research and the generator stage are proposed, not yet run;</text>
-          <text x="484" y="148">the checks between stages are the part already proven.</text>
-        </g>
-
-        <!-- 01 message -->
-        <rect x="20" y="232" width="136" height="88" rx="6" fill="#f5f5f5"/>
-        <rect x="20" y="232" width="136" height="88" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <rect x="28" y="240" width="20" height="12" rx="2" fill="transparent" stroke="#4f5d75" stroke-opacity="0.4" stroke-width="0.8"/>
-        <text x="38" y="249" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">01</text>
-        <text x="88" y="272" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Message</text>
-        <text x="88" y="290" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">post-script.md</text>
-        <text x="88" y="304" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">the hook, one caption</text>
-
-        <!-- 02 shot list -->
-        <rect x="252" y="232" width="136" height="88" rx="6" fill="#f5f5f5"/>
-        <rect x="252" y="232" width="136" height="88" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <rect x="260" y="240" width="20" height="12" rx="2" fill="transparent" stroke="#4f5d75" stroke-opacity="0.4" stroke-width="0.8"/>
-        <text x="270" y="249" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">02</text>
-        <text x="320" y="272" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Shot list</text>
-        <text x="320" y="290" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">shots.md</text>
-        <text x="320" y="304" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">prompt + ref per frame</text>
-
-        <!-- 03 generate -->
-        <rect x="484" y="232" width="136" height="88" rx="6" fill="#f5f5f5"/>
-        <rect x="484" y="232" width="136" height="88" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <rect x="492" y="240" width="20" height="12" rx="2" fill="transparent" stroke="#4f5d75" stroke-opacity="0.4" stroke-width="0.8"/>
-        <text x="502" y="249" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">03</text>
-        <text x="552" y="272" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Generate</text>
-        <text x="552" y="290" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">image / video model</text>
-        <text x="552" y="304" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">several takes per shot</text>
-
-        <!-- 04 review (focal) -->
-        <rect x="716" y="232" width="136" height="88" rx="6" fill="#f5f5f5"/>
-        <rect x="716" y="232" width="136" height="88" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
-        <rect x="724" y="240" width="20" height="12" rx="2" fill="transparent" stroke="#eb6c36" stroke-opacity="0.5" stroke-width="0.8"/>
-        <text x="734" y="249" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">04</text>
-        <text x="784" y="272" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Review</text>
-        <text x="784" y="290" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">review.md · verdict.md</text>
-        <text x="784" y="304" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">message · brand · flaws</text>
-
-        <!-- 05 publish -->
-        <rect x="948" y="232" width="136" height="88" rx="6" fill="#f5f5f5"/>
-        <rect x="948" y="232" width="136" height="88" rx="6" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <rect x="956" y="240" width="20" height="12" rx="2" fill="transparent" stroke="#4f5d75" stroke-opacity="0.4" stroke-width="0.8"/>
-        <text x="966" y="249" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">05</text>
-        <text x="1016" y="272" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Publish</text>
-        <text x="1016" y="290" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">weekly batch</text>
-        <text x="1016" y="304" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">weekly goal count met</text>
-
-        <!-- Back end: brand rules + prompt library, read by every stage (layout says so; no seven arrows). -->
-        <rect x="20" y="376" width="1064" height="56" rx="6" fill="#f5f5f5"/>
-        <rect x="20" y="376" width="1064" height="56" rx="6" fill="#ececec" stroke="#bfc0c0" stroke-width="1"/>
-        <text x="552" y="400" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Back end: brand rules, a prompt library and style references — read by every stage, improved by each review</text>
-        <text x="552" y="418" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">brand.md · prompts/ · refs/ · a contract per stage, the same idea as the story pipeline's CONTEXT.md × 5</text>
-
-        <!-- Legend: one horizontal strip -->
-        <line x1="20" y1="456" x2="1084" y2="456" stroke="#bfc0c0" stroke-width="0.8"/>
-        <g font-family="'Geist Mono', monospace" font-size="9" fill="#4f5d75" letter-spacing="0.04em">
-          <rect x="20" y="472" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-          <text x="44" y="482">THE CHECK THAT DECIDES A SHIP</text>
-          <line x1="352" y1="478" x2="388" y2="478" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-          <text x="396" y="482">ARROW LABEL = WHAT PASSES THE STAGE</text>
-          <line x1="712" y1="478" x2="748" y2="478" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-          <text x="756" y="482">DOWN = REVIEW WRITES A RULE INTO THE BACK END</text>
-        </g>
-      </svg>
+    <div class="flow">
+      <section class="band" style="--n:2">
+        <h2>1 · The message</h2>
+        <div class="row">
+          <div class="stage"><span class="num">01</span><h3>Message</h3><span class="file">post-script.md</span><p>The hook and one caption.</p></div>
+          <div class="hand">One per frame</div>
+          <div class="stage"><span class="num">02</span><h3>Shot list</h3><span class="file">shots.md</span><p>A prompt and a reference for each frame.</p></div>
+        </div>
+      </section>
+      <div class="hand">Prompts and references</div>
+      <section class="band" style="--n:2">
+        <h2>2 · The look, checked</h2>
+        <div class="row">
+          <div class="stage planned"><span class="num">03</span><h3>Generate</h3><span class="file">image / video model</span><p>Several takes per shot.</p></div>
+          <div class="hand">Pick the best, verify</div>
+          <div class="stage focal"><span class="num">04</span><h3>Review</h3><span class="file">review.md · verdict.md</span><p>Message, brand, flaws.</p></div>
+        </div>
+      </section>
+      <div class="hand ship">Watched, then “OK”</div>
+      <section class="band" style="--n:1">
+        <h2>3 · Shipped</h2>
+        <div class="row">
+          <div class="stage"><span class="num">05</span><h3>Publish</h3><span class="file">weekly batch</span><p>Done when the weekly goal is met.</p></div>
+        </div>
+      </section>
     </div>
-  </div>
+
+    <div class="backend">
+      <h3>Shared back end</h3>
+      <p>Brand rules, a prompt library and style references. Every stage reads them, and each review adds what it learned.</p>
+      <p class="file">brand.md · prompts/ · refs/ · a contract per stage, as in the story pipeline</p>
+    </div>
+
+    <p class="key"><span><span class="swatch" aria-hidden="true"></span>Highlighted: the check that decides whether it ships</span><span><span class="swatch dash" aria-hidden="true"></span>Dashed: proposed, not run yet</span><span>Between stages: what passes the work on</span></p>
+  </main>
 </body>
 </html>

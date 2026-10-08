@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The pipeline · How This Was Made</title>
+<meta name="description" content="How an AI content pipeline was built and checked: the work, the stages, the decisions, the tools, and what comes next.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="prev" href="work.html">
+<link rel="next" href="story.html">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="top-row">
+      <a class="brand" href="index.html">How this was made</a>
+      <span class="count">03 / 07<span class="label"> · The pipeline</span></span>
+    </div>
+    <ol class="progress" aria-label="Pages">
+      <li class="done"><a href="index.html" aria-label="1. Who and what"></a></li>
+      <li class="done"><a href="work.html" aria-label="2. The work"></a></li>
+      <li class=""><a href="pipeline.html" aria-label="3. The pipeline" aria-current="page"></a></li>
+      <li class=""><a href="story.html" aria-label="4. How it got here"></a></li>
+      <li class=""><a href="tools.html" aria-label="5. The toolset"></a></li>
+      <li class=""><a href="next.html" aria-label="6. What's next"></a></li>
+      <li class=""><a href="contact.html" aria-label="7. Contact"></a></li>
+    </ol>
+  </div>
+</header>
+<main id="main">
+<p class="eyebrow">03 · The pipeline</p>
+<h1>Message first, then the look, with a check between every stage</h1>
+<p class="lede">One folder per stage. Each stage has a short contract saying what it reads, what it makes and who checks it. Nothing moves on until that check passes.</p>
+
+<ol class="stages">
+  <li><h3>Script</h3>What it says, as captions, before any picture exists.<span class="who">check: I skim the captions</span></li>
+  <li><h3>Storyboard</h3>One beat per picture change, holds named, still no code.<span class="who">check: I read the beats</span></li>
+  <li><h3>Build</h3>An AI session writes the page on a shared engine and shared rules.<span class="who">check: the build's own tests</span></li>
+  <li class="focal"><h3>Review</h3>Stills of every beat, draw-time per frame, a hidden-tab test, the console, then a second model's verdict.<span class="who">check: I watch it start to finish</span></li>
+  <li><h3>Publish</h3>One commit, pushed only on my word, then the live URL must answer.<span class="who">check: HTTP 200 on the live page</span></li>
+</ol>
+
+<p>Each review writes what it learned back into the shared rules, so the next story starts from a better engine. One example from the lens rebuild is on the next page.</p>
+
+<a class="card shot-link diagram-link" href="../pipeline.html"><p class="tag used">Full diagram</p><h3>The story pipeline, as it ran on the lens explainer</h3><p>Every stage with its file, who checks it, and the shared back end.</p></a>
+
+<h2>Pointed at image and video</h2>
+<p>The same checks, with a research step in front: scan what is performing, pick one idea, write one message, then shot list, generate several takes, review against the message and brand, publish the weekly batch. This one is <em class="accent">proposed</em>: the research and generation stages have not run yet; the checks between stages are the part already proven.</p>
+<a class="card shot-link diagram-link" href="../content-pipeline.html"><p class="tag used">Full diagram · proposed</p><h3>The content pipeline</h3><p>Research first, then the same checked stages, pointed at image and video.</p></a>
+</main>
+<nav class="pager" aria-label="Page navigation">
+  <a class="prev" href="work.html"><span aria-hidden="true">&larr;</span> The work</a>
+  <a class="next" href="story.html">How it got here <span aria-hidden="true">&rarr;</span></a>
+</nav>
+<p class="keys">&larr; &rarr; keys also work</p>
+</body>
+</html>

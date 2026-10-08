@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The toolset · How This Was Made</title>
+<meta name="description" content="How an AI content pipeline was built and checked: the work, the stages, the decisions, the tools, and what comes next.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="prev" href="story.html">
+<link rel="next" href="next.html">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="top-row">
+      <a class="brand" href="index.html">How this was made</a>
+      <span class="count">05 / 07<span class="label"> · The toolset</span></span>
+    </div>
+    <ol class="progress" aria-label="Pages">
+      <li class="done"><a href="index.html" aria-label="1. Who and what"></a></li>
+      <li class="done"><a href="work.html" aria-label="2. The work"></a></li>
+      <li class="done"><a href="pipeline.html" aria-label="3. The pipeline"></a></li>
+      <li class="done"><a href="story.html" aria-label="4. How it got here"></a></li>
+      <li class=""><a href="tools.html" aria-label="5. The toolset" aria-current="page"></a></li>
+      <li class=""><a href="next.html" aria-label="6. What's next"></a></li>
+      <li class=""><a href="contact.html" aria-label="7. Contact"></a></li>
+    </ol>
+  </div>
+</header>
+<main id="main">
+<p class="eyebrow">05 · The toolset</p>
+<h1>Each tool has one job. The checks between them are mine.</h1>
+<p class="lede">Bigger models where judgment matters, smaller ones for scripted and mechanical work. That keeps quality where it counts and cost down everywhere else.</p>
+
+<h2>In use</h2>
+<div class="grid two">
+  <div class="card focal"><p class="tag used">Agent</p><h3>Claude Code</h3><p>The AI that writes the code, runs the checks and drives the browser, one session per stage.</p></div>
+  <div class="card"><p class="tag used">Models</p><h3>Claude Opus · Fable · Sonnet · Haiku</h3><p>Opus designs and makes judgment calls. Fable gives the independent verdict on a finished piece. Sonnet runs scripted builds. Haiku does mechanical checks, such as the link check on this site.</p></div>
+  <div class="card"><p class="tag used">Animation</p><h3>Canvas2D + GSAP timeline</h3><p>One timeline owns the clock: a label per beat, holds, scrubbing, and a pause when the tab is hidden.</p></div>
+  <div class="card"><p class="tag used">Diagrams</p><h3>diagram-design</h3><p>A Claude plugin with a fixed design system; both pipeline diagrams were made with it.</p></div>
+  <div class="card"><p class="tag used">Review</p><h3>Chrome, automated</h3><p>Stills of every beat, draw time per frame, console errors, and the phone-width screenshots of these pages.</p></div>
+  <div class="card"><p class="tag used">Publish</p><h3>GitHub Pages</h3><p>One commit per piece; a page counts as shipped only when its live URL answers.</p></div>
+</div>
+
+<h2>Installed for the video, not used yet</h2>
+<div class="grid three">
+  <div class="card"><p class="tag">Voice</p><h3>Piper</h3><p>A local AI voice, so narration costs nothing per take.</p></div>
+  <div class="card"><p class="tag">Timing</p><h3>faster-whisper</h3><p>Turns the narration into word-level timestamps that captions and cuts follow.</p></div>
+  <div class="card"><p class="tag">Render</p><h3>ffmpeg</h3><p>Frames plus voice into one vertical video.</p></div>
+</div>
+
+<h2>Planned</h2>
+<div class="grid two">
+  <div class="card"><p class="tag">Video generation</p><h3>Kling AI, free tier</h3><p>Two or three short generated clips for the video, labelled as a first run.</p></div>
+</div>
+</main>
+<nav class="pager" aria-label="Page navigation">
+  <a class="prev" href="story.html"><span aria-hidden="true">&larr;</span> How it got here</a>
+  <a class="next" href="next.html">What's next <span aria-hidden="true">&rarr;</span></a>
+</nav>
+<p class="keys">&larr; &rarr; keys also work</p>
+</body>
+</html>
